@@ -1,0 +1,169 @@
+GREEDY ALGORITHMS
+=================
+Greedy algorithms make the locally optimal choice at each step hoping to find a global optimum.
+They do NOT reconsider past choices (unlike DP).
+
+When to use greedy: when local optimum leads to global optimum (greedy choice property + optimal substructure).
+
+--- Activity Selection Problem ---
+Select maximum number of non-overlapping activities.
+Sort by end time, always pick activity that ends earliest.
+Time: O(n log n).
+
+def activity_selection(activities):
+    # activities: [(start, end), ...]
+    activities.sort(key=lambda x: x[1])  # sort by end time
+    selected = [activities[0]]
+    last_end = activities[0][1]
+    for start, end in activities[1:]:
+        if start >= last_end:
+            selected.append((start, end))
+            last_end = end
+    return selected
+
+acts = [(1,4),(3,5),(0,6),(5,7),(3,9),(5,9),(6,10),(8,11),(8,12),(2,14),(12,16)]
+print(activity_selection(acts))
+# [(1,4),(5,7),(8,11),(12,16)] — 4 activities
+
+--- Fractional Knapsack ---
+Take fractions of items to maximize value. Unlike 0/1 knapsack, items can be split.
+Sort by value/weight ratio. Greedy works here (not for 0/1).
+Time: O(n log n).
+
+def fractional_knapsack(weights, values, capacity):
+    items = sorted(zip(values, weights), key=lambda x: x[0]/x[1], reverse=True)
+    total_value = 0
+    for value, weight in items:
+        if capacity >= weight:
+            total_value += value
+            capacity -= weight
+        else:
+            total_value += value * (capacity / weight)
+            break
+    return round(total_value, 2)
+
+weights = [10, 20, 30]
+values  = [60, 100, 120]
+print(fractional_knapsack(weights, values, 50))  # Output: 240.0
+
+--- Coin Change (Greedy — only works for canonical coin systems) ---
+For standard denominations (1,5,10,25 cents), greedy gives minimum coins.
+Note: greedy FAILS for arbitrary denominations — use DP instead.
+
+def coin_change_greedy(coins, amount):
+    coins.sort(reverse=True)
+    count = 0
+    result = []
+    for coin in coins:
+        while amount >= coin:
+            amount -= coin
+            count += 1
+            result.append(coin)
+    return count, result
+
+print(coin_change_greedy([1, 5, 10, 25], 41))
+# Output: (4, [25, 10, 5, 1])
+
+--- Job Scheduling to Maximize Profit ---
+Schedule jobs with deadlines to maximize total profit. Each job takes 1 unit of time.
+Time: O(n^2).
+
+def job_scheduling(jobs):
+    # jobs: [(id, deadline, profit), ...]
+    jobs.sort(key=lambda x: x[2], reverse=True)  # sort by profit
+    max_deadline = max(j[1] for j in jobs)
+    slots = [None] * (max_deadline + 1)
+    total_profit = 0
+    for job_id, deadline, profit in jobs:
+        for t in range(min(deadline, max_deadline), 0, -1):
+            if slots[t] is None:
+                slots[t] = job_id
+                total_profit += profit
+                break
+    scheduled = [s for s in slots if s]
+    return scheduled, total_profit
+
+jobs = [('a',2,100),('b',1,19),('c',2,27),('d',1,25),('e',3,15)]
+print(job_scheduling(jobs))  # (['c', 'a', 'e'], 142)
+
+--- Huffman Encoding ---
+Build optimal prefix-free codes for data compression.
+Characters with higher frequency get shorter codes.
+Time: O(n log n).
+
+import heapq
+
+def huffman_encoding(freq):
+    heap = [[f, [ch, ""]] for ch, f in freq.items()]
+    heapq.heapify(heap)
+    while len(heap) > 1:
+        lo = heapq.heappop(heap)
+        hi = heapq.heappop(heap)
+        for pair in lo[1:]:
+            pair[1] = '0' + pair[1]
+        for pair in hi[1:]:
+            pair[1] = '1' + pair[1]
+        heapq.heappush(heap, [lo[0] + hi[0]] + lo[1:] + hi[1:])
+    return sorted(heap[0][1:], key=lambda x: len(x[1]))
+
+freq = {'a': 5, 'b': 9, 'c': 12, 'd': 13, 'e': 16, 'f': 45}
+codes = huffman_encoding(freq)
+for char, code in codes:
+    print(f"{char}: {code}")
+# f: 0
+# c: 100
+# d: 101
+# a: 1100
+# b: 1101
+# e: 111
+
+--- Minimum Platforms (Greedy) ---
+Find minimum number of platforms needed at a railway station.
+Time: O(n log n).
+
+def min_platforms(arrivals, departures):
+    arrivals.sort()
+    departures.sort()
+    platforms = 1
+    max_platforms = 1
+    i = 1
+    j = 0
+    while i < len(arrivals) and j < len(departures):
+        if arrivals[i] <= departures[j]:
+            platforms += 1
+            i += 1
+        else:
+            platforms -= 1
+            j += 1
+        max_platforms = max(max_platforms, platforms)
+    return max_platforms
+
+arr = [900, 940, 950, 1100, 1500, 1800]
+dep = [910, 1200, 1120, 1130, 1900, 2000]
+print(min_platforms(arr, dep))  # Output: 3
+
+--- Gas Station (Circular Route) ---
+Find starting gas station to complete a circular route. Greedy: if total gas >= total cost, solution exists.
+Time: O(n). Space: O(1).
+
+def can_complete_circuit(gas, cost):
+    total_tank = 0
+    curr_tank = 0
+    start = 0
+    for i in range(len(gas)):
+        diff = gas[i] - cost[i]
+        total_tank += diff
+        curr_tank += diff
+        if curr_tank < 0:
+            start = i + 1
+            curr_tank = 0
+    return start if total_tank >= 0 else -1
+
+gas  = [1, 2, 3, 4, 5]
+cost = [3, 4, 5, 1, 2]
+print(can_complete_circuit(gas, cost))  # Output: 3
+
+--- Greedy vs Dynamic Programming ---
+Greedy: fast O(n log n), works when greedy choice is provably optimal.
+DP: slower O(n^2) or O(n*W), works for all optimization problems.
+Example: Fractional Knapsack → Greedy. 0/1 Knapsack → DP.

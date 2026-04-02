@@ -1,0 +1,206 @@
+LINKED LISTS
+============
+A linked list stores elements in nodes. Each node holds data and a pointer to the next node.
+Unlike arrays, nodes are not stored in contiguous memory.
+
+Advantages: O(1) insert/delete at head, dynamic size.
+Disadvantages: O(n) access by index, extra memory for pointers.
+
+--- Node Definition ---
+class Node:
+    def __init__(self, data):
+        self.data = data
+        self.next = None
+
+--- Singly Linked List ---
+Each node points to the next. Last node points to None.
+
+class LinkedList:
+    def __init__(self):
+        self.head = None
+
+    def insert_at_head(self, data):
+        node = Node(data)
+        node.next = self.head
+        self.head = node
+
+    def insert_at_tail(self, data):
+        node = Node(data)
+        if not self.head:
+            self.head = node
+            return
+        curr = self.head
+        while curr.next:
+            curr = curr.next
+        curr.next = node
+
+    def delete(self, data):
+        if not self.head:
+            return
+        if self.head.data == data:
+            self.head = self.head.next
+            return
+        curr = self.head
+        while curr.next and curr.next.data != data:
+            curr = curr.next
+        if curr.next:
+            curr.next = curr.next.next
+
+    def search(self, data):
+        curr = self.head
+        while curr:
+            if curr.data == data:
+                return True
+            curr = curr.next
+        return False
+
+    def print_list(self):
+        curr = self.head
+        result = []
+        while curr:
+            result.append(curr.data)
+            curr = curr.next
+        print(result)
+
+ll = LinkedList()
+ll.insert_at_tail(1)
+ll.insert_at_tail(2)
+ll.insert_at_tail(3)
+ll.insert_at_head(0)
+ll.print_list()   # [0, 1, 2, 3]
+ll.delete(2)
+ll.print_list()   # [0, 1, 3]
+
+--- Reverse a Linked List ---
+Time: O(n). Space: O(1).
+
+def reverse(head):
+    prev = None
+    curr = head
+    while curr:
+        next_node = curr.next
+        curr.next = prev
+        prev = curr
+        curr = next_node
+    return prev  # new head
+
+--- Detect Cycle (Floyd's Algorithm) ---
+Use slow and fast pointers. If they meet, there is a cycle.
+Time: O(n). Space: O(1).
+
+def has_cycle(head):
+    slow = fast = head
+    while fast and fast.next:
+        slow = slow.next
+        fast = fast.next.next
+        if slow == fast:
+            return True
+    return False
+
+--- Find Middle of Linked List ---
+Time: O(n). Space: O(1).
+
+def find_middle(head):
+    slow = fast = head
+    while fast and fast.next:
+        slow = slow.next
+        fast = fast.next.next
+    return slow  # slow is at middle
+
+--- Merge Two Sorted Linked Lists ---
+Time: O(n + m). Space: O(1).
+
+def merge_sorted(l1, l2):
+    dummy = Node(0)
+    curr = dummy
+    while l1 and l2:
+        if l1.data <= l2.data:
+            curr.next = l1
+            l1 = l1.next
+        else:
+            curr.next = l2
+            l2 = l2.next
+        curr = curr.next
+    curr.next = l1 or l2
+    return dummy.next
+
+--- Remove Nth Node From End ---
+Use two pointers separated by n steps.
+Time: O(n). Space: O(1).
+
+def remove_nth_from_end(head, n):
+    dummy = Node(0)
+    dummy.next = head
+    fast = slow = dummy
+    for _ in range(n + 1):
+        fast = fast.next
+    while fast:
+        slow = slow.next
+        fast = fast.next
+    slow.next = slow.next.next
+    return dummy.next
+
+--- Check if Palindrome ---
+Time: O(n). Space: O(1).
+
+def is_palindrome(head):
+    # Find middle
+    slow = fast = head
+    while fast and fast.next:
+        slow = slow.next
+        fast = fast.next.next
+    # Reverse second half
+    prev = None
+    curr = slow
+    while curr:
+        nxt = curr.next
+        curr.next = prev
+        prev = curr
+        curr = nxt
+    # Compare halves
+    left, right = head, prev
+    while right:
+        if left.data != right.data:
+            return False
+        left = left.next
+        right = right.next
+    return True
+
+--- Doubly Linked List ---
+Each node has a pointer to both next and previous nodes.
+
+class DNode:
+    def __init__(self, data):
+        self.data = data
+        self.next = None
+        self.prev = None
+
+class DoublyLinkedList:
+    def __init__(self):
+        self.head = None
+
+    def insert_at_head(self, data):
+        node = DNode(data)
+        if self.head:
+            self.head.prev = node
+        node.next = self.head
+        self.head = node
+
+    def delete(self, node):
+        if node.prev:
+            node.prev.next = node.next
+        else:
+            self.head = node.next
+        if node.next:
+            node.next.prev = node.prev
+
+--- Circular Linked List ---
+Last node points back to head forming a circle.
+
+def is_circular(head):
+    if not head:
+        return False
+    curr = head.next
+    while curr and curr != head:
+        curr = curr.next
+    return curr == head

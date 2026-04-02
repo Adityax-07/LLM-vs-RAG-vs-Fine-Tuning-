@@ -1,0 +1,217 @@
+GRAPH ALGORITHMS
+================
+A graph has vertices (nodes) connected by edges. Used to model networks, maps, dependencies.
+
+Types:
+- Directed / Undirected
+- Weighted / Unweighted
+- Cyclic / Acyclic (DAG = Directed Acyclic Graph)
+
+Representations:
+- Adjacency Matrix: 2D array. O(1) edge lookup, O(V^2) space.
+- Adjacency List: dict/list of lists. O(V+E) space. Most common.
+
+# Adjacency List representation
+graph = {
+    0: [1, 2],
+    1: [0, 3, 4],
+    2: [0],
+    3: [1],
+    4: [1]
+}
+
+--- BFS (Breadth-First Search) ---
+Explore level by level using a queue. Finds shortest path in unweighted graphs.
+Time: O(V+E). Space: O(V).
+
+from collections import deque
+
+def bfs(graph, start):
+    visited = set([start])
+    queue = deque([start])
+    order = []
+    while queue:
+        node = queue.popleft()
+        order.append(node)
+        for neighbor in graph[node]:
+            if neighbor not in visited:
+                visited.add(neighbor)
+                queue.append(neighbor)
+    return order
+
+graph = {0:[1,2], 1:[0,3,4], 2:[0], 3:[1], 4:[1]}
+print(bfs(graph, 0))  # Output: [0, 1, 2, 3, 4]
+
+--- DFS (Depth-First Search) ---
+Explore as deep as possible before backtracking. Uses stack (or recursion).
+Time: O(V+E). Space: O(V).
+
+# Iterative DFS
+def dfs_iterative(graph, start):
+    visited = set()
+    stack = [start]
+    order = []
+    while stack:
+        node = stack.pop()
+        if node not in visited:
+            visited.add(node)
+            order.append(node)
+            for neighbor in graph[node]:
+                if neighbor not in visited:
+                    stack.append(neighbor)
+    return order
+
+# Recursive DFS
+def dfs_recursive(graph, node, visited=None):
+    if visited is None:
+        visited = set()
+    visited.add(node)
+    result = [node]
+    for neighbor in graph[node]:
+        if neighbor not in visited:
+            result += dfs_recursive(graph, neighbor, visited)
+    return result
+
+print(dfs_iterative(graph, 0))   # Output: [0, 2, 1, 4, 3]
+print(dfs_recursive(graph, 0))   # Output: [0, 1, 3, 4, 2]
+
+--- Shortest Path: Dijkstra's Algorithm ---
+Find shortest path from source to all nodes in a weighted graph (non-negative weights).
+Time: O((V+E) log V) with min-heap. Space: O(V).
+
+import heapq
+
+def dijkstra(graph, start):
+    # graph: {node: [(neighbor, weight), ...]}
+    dist = {node: float('inf') for node in graph}
+    dist[start] = 0
+    heap = [(0, start)]  # (distance, node)
+    while heap:
+        d, u = heapq.heappop(heap)
+        if d > dist[u]:
+            continue
+        for v, w in graph[u]:
+            if dist[u] + w < dist[v]:
+                dist[v] = dist[u] + w
+                heapq.heappush(heap, (dist[v], v))
+    return dist
+
+wgraph = {
+    'A': [('B', 1), ('C', 4)],
+    'B': [('C', 2), ('D', 5)],
+    'C': [('D', 1)],
+    'D': []
+}
+print(dijkstra(wgraph, 'A'))
+# Output: {'A': 0, 'B': 1, 'C': 3, 'D': 4}
+
+--- Cycle Detection in Directed Graph ---
+Use DFS with a recursion stack to detect back edges.
+
+def has_cycle_directed(graph):
+    visited = set()
+    rec_stack = set()
+
+    def dfs(node):
+        visited.add(node)
+        rec_stack.add(node)
+        for neighbor in graph.get(node, []):
+            if neighbor not in visited:
+                if dfs(neighbor):
+                    return True
+            elif neighbor in rec_stack:
+                return True
+        rec_stack.remove(node)
+        return False
+
+    for node in graph:
+        if node not in visited:
+            if dfs(node):
+                return True
+    return False
+
+g1 = {0: [1], 1: [2], 2: [0]}  # cycle
+g2 = {0: [1], 1: [2], 2: []}   # no cycle
+print(has_cycle_directed(g1))   # True
+print(has_cycle_directed(g2))   # False
+
+--- Topological Sort (Kahn's Algorithm) ---
+Linear ordering of vertices in a DAG such that for every edge u->v, u comes before v.
+Time: O(V+E). Space: O(V).
+
+from collections import deque
+
+def topological_sort(graph, num_nodes):
+    in_degree = [0] * num_nodes
+    for u in graph:
+        for v in graph[u]:
+            in_degree[v] += 1
+    queue = deque([i for i in range(num_nodes) if in_degree[i] == 0])
+    order = []
+    while queue:
+        node = queue.popleft()
+        order.append(node)
+        for neighbor in graph.get(node, []):
+            in_degree[neighbor] -= 1
+            if in_degree[neighbor] == 0:
+                queue.append(neighbor)
+    return order if len(order) == num_nodes else []  # empty = cycle
+
+dag = {0: [1, 2], 1: [3], 2: [3], 3: []}
+print(topological_sort(dag, 4))  # Output: [0, 1, 2, 3] or [0, 2, 1, 3]
+
+--- Minimum Spanning Tree: Kruskal's Algorithm ---
+Connect all nodes with minimum total edge weight. Uses Union-Find.
+Time: O(E log E). Space: O(V).
+
+def kruskal(num_nodes, edges):
+    # edges: [(weight, u, v), ...]
+    edges.sort()
+    parent = list(range(num_nodes))
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(x, y):
+        px, py = find(x), find(y)
+        if px == py:
+            return False
+        parent[px] = py
+        return True
+
+    mst_cost = 0
+    mst_edges = []
+    for w, u, v in edges:
+        if union(u, v):
+            mst_cost += w
+            mst_edges.append((u, v, w))
+    return mst_cost, mst_edges
+
+edges = [(4,0,1),(2,0,2),(3,1,2),(1,1,3),(5,2,3)]
+print(kruskal(4, edges))
+# Output: (6, [(1, 3, 1), (0, 2, 2), (1, 2, 3)])
+
+--- Bellman-Ford Algorithm ---
+Shortest path with negative weights. Detects negative cycles.
+Time: O(V*E). Space: O(V).
+
+def bellman_ford(graph, num_nodes, start):
+    # graph: [(u, v, weight), ...]
+    dist = [float('inf')] * num_nodes
+    dist[start] = 0
+    for _ in range(num_nodes - 1):
+        for u, v, w in graph:
+            if dist[u] + w < dist[v]:
+                dist[v] = dist[u] + w
+    # Check for negative cycles
+    for u, v, w in graph:
+        if dist[u] + w < dist[v]:
+            return None  # negative cycle
+    return dist
+
+edges = [(0,1,4),(0,2,5),(1,2,-3),(2,3,4)]
+print(bellman_ford(edges, 4, 0))
+# Output: [0, 4, 1, 5]

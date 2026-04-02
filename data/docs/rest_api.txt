@@ -1,0 +1,21 @@
+REST API (Representational State Transfer) is an architectural style for web services.
+REST uses standard HTTP methods to perform operations on resources.
+
+HTTP Methods:
+- GET: retrieve/read resource. No request body.
+- POST: create new resource. Data sent in request body.
+- PUT: update existing resource completely.
+- PATCH: partially update a resource.
+- DELETE: remove a resource.
+
+HTTP Status Codes:
+- 200 OK: request succeeded.
+- 201 Created: new resource created successfully.
+- 400 Bad Request: invalid request from client.
+- 401 Unauthorized: authentication required.
+- 403 Forbidden: authenticated but not authorized.
+- 404 Not Found: resource does not exist.
+- 500 Internal Server Error: server-side error.
+
+REST principles: Stateless, Client-Server, Cacheable, Uniform Interface.
+JSON is the most common data format for REST API responses.

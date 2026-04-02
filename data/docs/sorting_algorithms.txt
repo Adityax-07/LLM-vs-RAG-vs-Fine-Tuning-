@@ -1,0 +1,165 @@
+SORTING ALGORITHMS
+==================
+
+--- Bubble Sort ---
+Repeatedly compare adjacent elements and swap if out of order. Largest element bubbles to end each pass.
+Time: O(n^2) average/worst, O(n) best (already sorted). Space: O(1). Stable.
+
+def bubble_sort(arr):
+    n = len(arr)
+    for i in range(n):
+        swapped = False
+        for j in range(0, n - i - 1):
+            if arr[j] > arr[j + 1]:
+                arr[j], arr[j + 1] = arr[j + 1], arr[j]
+                swapped = True
+        if not swapped:
+            break  # already sorted
+    return arr
+
+print(bubble_sort([64, 34, 25, 12, 22, 11, 90]))
+# Output: [11, 12, 22, 25, 34, 64, 90]
+
+--- Selection Sort ---
+Find the minimum element and place it at the beginning. Repeat for remaining array.
+Time: O(n^2) all cases. Space: O(1). Not stable.
+
+def selection_sort(arr):
+    n = len(arr)
+    for i in range(n):
+        min_idx = i
+        for j in range(i + 1, n):
+            if arr[j] < arr[min_idx]:
+                min_idx = j
+        arr[i], arr[min_idx] = arr[min_idx], arr[i]
+    return arr
+
+print(selection_sort([64, 25, 12, 22, 11]))
+# Output: [11, 12, 22, 25, 64]
+
+--- Insertion Sort ---
+Build sorted array one element at a time. Take each element and insert it into the correct position.
+Time: O(n^2) worst, O(n) best. Space: O(1). Stable. Best for small or nearly sorted data.
+
+def insertion_sort(arr):
+    for i in range(1, len(arr)):
+        key = arr[i]
+        j = i - 1
+        while j >= 0 and arr[j] > key:
+            arr[j + 1] = arr[j]
+            j -= 1
+        arr[j + 1] = key
+    return arr
+
+print(insertion_sort([12, 11, 13, 5, 6]))
+# Output: [5, 6, 11, 12, 13]
+
+--- Merge Sort ---
+Divide array in half, recursively sort both halves, then merge the sorted halves.
+Time: O(n log n) all cases. Space: O(n). Stable. Best for linked lists and large datasets.
+
+def merge_sort(arr):
+    if len(arr) <= 1:
+        return arr
+    mid = len(arr) // 2
+    left = merge_sort(arr[:mid])
+    right = merge_sort(arr[mid:])
+    return merge(left, right)
+
+def merge(left, right):
+    result = []
+    i = j = 0
+    while i < len(left) and j < len(right):
+        if left[i] <= right[j]:
+            result.append(left[i]); i += 1
+        else:
+            result.append(right[j]); j += 1
+    result.extend(left[i:])
+    result.extend(right[j:])
+    return result
+
+print(merge_sort([38, 27, 43, 3, 9, 82, 10]))
+# Output: [3, 9, 10, 27, 38, 43, 82]
+
+--- Quick Sort ---
+Pick a pivot, partition array so all elements less than pivot are on left, greater on right. Recurse.
+Time: O(n log n) average, O(n^2) worst. Space: O(log n). Not stable. Fastest in practice.
+
+def quick_sort(arr, low=0, high=None):
+    if high is None:
+        high = len(arr) - 1
+    if low < high:
+        pi = partition(arr, low, high)
+        quick_sort(arr, low, pi - 1)
+        quick_sort(arr, pi + 1, high)
+    return arr
+
+def partition(arr, low, high):
+    pivot = arr[high]
+    i = low - 1
+    for j in range(low, high):
+        if arr[j] <= pivot:
+            i += 1
+            arr[i], arr[j] = arr[j], arr[i]
+    arr[i + 1], arr[high] = arr[high], arr[i + 1]
+    return i + 1
+
+print(quick_sort([10, 7, 8, 9, 1, 5]))
+# Output: [1, 5, 7, 8, 9, 10]
+
+--- Heap Sort ---
+Build a max-heap from the array. Repeatedly extract the maximum and place at end.
+Time: O(n log n) all cases. Space: O(1). Not stable.
+
+def heap_sort(arr):
+    n = len(arr)
+    for i in range(n // 2 - 1, -1, -1):
+        heapify(arr, n, i)
+    for i in range(n - 1, 0, -1):
+        arr[0], arr[i] = arr[i], arr[0]
+        heapify(arr, i, 0)
+    return arr
+
+def heapify(arr, n, i):
+    largest = i
+    left = 2 * i + 1
+    right = 2 * i + 2
+    if left < n and arr[left] > arr[largest]:
+        largest = left
+    if right < n and arr[right] > arr[largest]:
+        largest = right
+    if largest != i:
+        arr[i], arr[largest] = arr[largest], arr[i]
+        heapify(arr, n, largest)
+
+print(heap_sort([12, 11, 13, 5, 6, 7]))
+# Output: [5, 6, 7, 11, 12, 13]
+
+--- Counting Sort ---
+Count occurrences of each element. Works only on non-negative integers within a known range.
+Time: O(n + k) where k is the range. Space: O(k). Stable.
+
+def counting_sort(arr):
+    if not arr:
+        return arr
+    max_val = max(arr)
+    count = [0] * (max_val + 1)
+    for num in arr:
+        count[num] += 1
+    result = []
+    for i, c in enumerate(count):
+        result.extend([i] * c)
+    return result
+
+print(counting_sort([4, 2, 2, 8, 3, 3, 1]))
+# Output: [1, 2, 2, 3, 3, 4, 8]
+
+--- Comparison Summary ---
+Algorithm     | Best      | Average   | Worst     | Space  | Stable
+Bubble Sort   | O(n)      | O(n^2)    | O(n^2)    | O(1)   | Yes
+Selection Sort| O(n^2)    | O(n^2)    | O(n^2)    | O(1)   | No
+Insertion Sort| O(n)      | O(n^2)    | O(n^2)    | O(1)   | Yes
+Merge Sort    | O(n log n)| O(n log n)| O(n log n)| O(n)   | Yes
+Quick Sort    | O(n log n)| O(n log n)| O(n^2)    | O(log n)| No
+Heap Sort     | O(n log n)| O(n log n)| O(n log n)| O(1)   | No
+Counting Sort | O(n+k)    | O(n+k)    | O(n+k)    | O(k)   | Yes

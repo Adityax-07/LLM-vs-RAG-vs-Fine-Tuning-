@@ -1,0 +1,173 @@
+DYNAMIC PROGRAMMING (DP)
+========================
+DP solves problems by breaking them into overlapping subproblems and storing results to avoid recomputation.
+
+Two approaches:
+- Top-Down (Memoization): recursion + cache
+- Bottom-Up (Tabulation): fill a table iteratively
+
+Key properties needed:
+1. Optimal substructure: optimal solution built from optimal subproblems.
+2. Overlapping subproblems: same subproblem solved multiple times.
+
+--- Fibonacci Number ---
+Classic DP example. fib(n) = fib(n-1) + fib(n-2)
+
+# Naive recursion - O(2^n)
+def fib_naive(n):
+    if n <= 1:
+        return n
+    return fib_naive(n-1) + fib_naive(n-2)
+
+# Memoization - O(n)
+def fib_memo(n, memo={}):
+    if n in memo:
+        return memo[n]
+    if n <= 1:
+        return n
+    memo[n] = fib_memo(n-1, memo) + fib_memo(n-2, memo)
+    return memo[n]
+
+# Tabulation - O(n)
+def fib_dp(n):
+    if n <= 1:
+        return n
+    dp = [0] * (n + 1)
+    dp[1] = 1
+    for i in range(2, n + 1):
+        dp[i] = dp[i-1] + dp[i-2]
+    return dp[n]
+
+print(fib_dp(10))   # Output: 55
+print(fib_dp(20))   # Output: 6765
+
+--- 0/1 Knapsack Problem ---
+Given items with weights and values, maximize value in a bag of capacity W.
+Each item can be taken once (0/1). Time: O(n*W). Space: O(n*W).
+
+def knapsack(weights, values, capacity):
+    n = len(weights)
+    dp = [[0] * (capacity + 1) for _ in range(n + 1)]
+    for i in range(1, n + 1):
+        for w in range(capacity + 1):
+            # Don't take item i
+            dp[i][w] = dp[i-1][w]
+            # Take item i if it fits
+            if weights[i-1] <= w:
+                dp[i][w] = max(dp[i][w], dp[i-1][w - weights[i-1]] + values[i-1])
+    return dp[n][capacity]
+
+weights = [1, 2, 3, 5]
+values  = [1, 6, 10, 16]
+capacity = 7
+print(knapsack(weights, values, capacity))  # Output: 22
+
+--- Longest Common Subsequence (LCS) ---
+Find length of longest subsequence present in both strings.
+Time: O(m*n). Space: O(m*n).
+
+def lcs(s1, s2):
+    m, n = len(s1), len(s2)
+    dp = [[0] * (n + 1) for _ in range(m + 1)]
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            if s1[i-1] == s2[j-1]:
+                dp[i][j] = dp[i-1][j-1] + 1
+            else:
+                dp[i][j] = max(dp[i-1][j], dp[i][j-1])
+    return dp[m][n]
+
+print(lcs("ABCBDAB", "BDCABA"))  # Output: 4 (BCBA)
+
+--- Longest Increasing Subsequence (LIS) ---
+Find length of longest strictly increasing subsequence.
+Time: O(n^2). Space: O(n).
+
+def lis(arr):
+    n = len(arr)
+    dp = [1] * n
+    for i in range(1, n):
+        for j in range(i):
+            if arr[j] < arr[i]:
+                dp[i] = max(dp[i], dp[j] + 1)
+    return max(dp)
+
+print(lis([10, 9, 2, 5, 3, 7, 101, 18]))  # Output: 4 (2,3,7,101)
+
+--- Coin Change Problem ---
+Find minimum number of coins to make amount. Coins can be reused.
+Time: O(amount * len(coins)). Space: O(amount).
+
+def coin_change(coins, amount):
+    dp = [float('inf')] * (amount + 1)
+    dp[0] = 0
+    for i in range(1, amount + 1):
+        for coin in coins:
+            if coin <= i:
+                dp[i] = min(dp[i], dp[i - coin] + 1)
+    return dp[amount] if dp[amount] != float('inf') else -1
+
+print(coin_change([1, 5, 6, 9], 11))  # Output: 2 (coins 5+6)
+print(coin_change([2], 3))            # Output: -1 (impossible)
+
+--- Subset Sum Problem ---
+Check if any subset of array sums to target.
+Time: O(n * target). Space: O(n * target).
+
+def subset_sum(arr, target):
+    n = len(arr)
+    dp = [[False] * (target + 1) for _ in range(n + 1)]
+    for i in range(n + 1):
+        dp[i][0] = True  # sum 0 always possible
+    for i in range(1, n + 1):
+        for j in range(1, target + 1):
+            dp[i][j] = dp[i-1][j]
+            if arr[i-1] <= j:
+                dp[i][j] = dp[i][j] or dp[i-1][j - arr[i-1]]
+    return dp[n][target]
+
+print(subset_sum([3, 34, 4, 12, 5, 2], 9))  # Output: True (4+5)
+print(subset_sum([3, 34, 4, 12, 5, 2], 30)) # Output: False
+
+--- Matrix Chain Multiplication ---
+Find minimum operations to multiply a chain of matrices.
+Time: O(n^3). Space: O(n^2).
+
+def matrix_chain(dims):
+    n = len(dims) - 1
+    dp = [[0] * n for _ in range(n)]
+    for length in range(2, n + 1):
+        for i in range(n - length + 1):
+            j = i + length - 1
+            dp[i][j] = float('inf')
+            for k in range(i, j):
+                cost = dp[i][k] + dp[k+1][j] + dims[i]*dims[k+1]*dims[j+1]
+                dp[i][j] = min(dp[i][j], cost)
+    return dp[0][n-1]
+
+dims = [40, 20, 30, 10, 30]
+print(matrix_chain(dims))  # Output: 26000
+
+--- Edit Distance (Levenshtein) ---
+Minimum operations (insert, delete, replace) to convert one string to another.
+Time: O(m*n). Space: O(m*n).
+
+def edit_distance(s1, s2):
+    m, n = len(s1), len(s2)
+    dp = [[0] * (n + 1) for _ in range(m + 1)]
+    for i in range(m + 1):
+        dp[i][0] = i
+    for j in range(n + 1):
+        dp[0][j] = j
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            if s1[i-1] == s2[j-1]:
+                dp[i][j] = dp[i-1][j-1]
+            else:
+                dp[i][j] = 1 + min(dp[i-1][j],    # delete
+                                   dp[i][j-1],    # insert
+                                   dp[i-1][j-1])  # replace
+    return dp[m][n]
+
+print(edit_distance("horse", "ros"))   # Output: 3
+print(edit_distance("intention", "execution"))  # Output: 5

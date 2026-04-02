@@ -1,0 +1,204 @@
+BACKTRACKING
+============
+Backtracking explores all possible solutions by building candidates incrementally.
+If a candidate fails, it backtracks and tries the next option.
+
+Template:
+def backtrack(state, choices):
+    if is_solution(state):
+        record(state)
+        return
+    for choice in choices:
+        if is_valid(state, choice):
+            make_choice(state, choice)
+            backtrack(state, remaining_choices)
+            undo_choice(state, choice)   # BACKTRACK
+
+--- Generate All Subsets ---
+def subsets(nums):
+    result = []
+    def backtrack(start, current):
+        result.append(current[:])   # record every state
+        for i in range(start, len(nums)):
+            current.append(nums[i])
+            backtrack(i + 1, current)
+            current.pop()           # backtrack
+    backtrack(0, [])
+    return result
+
+print(subsets([1, 2, 3]))
+# [[], [1], [1,2], [1,2,3], [1,3], [2], [2,3], [3]]
+
+--- Generate All Permutations ---
+def permute(nums):
+    result = []
+    def backtrack(current):
+        if len(current) == len(nums):
+            result.append(current[:])
+            return
+        for num in nums:
+            if num not in current:
+                current.append(num)
+                backtrack(current)
+                current.pop()   # backtrack
+    backtrack([])
+    return result
+
+print(permute([1, 2, 3]))
+# [[1,2,3], [1,3,2], [2,1,3], [2,3,1], [3,1,2], [3,2,1]]
+
+--- Combination Sum ---
+Find all combinations that sum to target. Numbers can be reused.
+
+def combination_sum(candidates, target):
+    result = []
+    candidates.sort()
+    def backtrack(start, current, remaining):
+        if remaining == 0:
+            result.append(current[:])
+            return
+        for i in range(start, len(candidates)):
+            if candidates[i] > remaining:
+                break
+            current.append(candidates[i])
+            backtrack(i, current, remaining - candidates[i])  # i (not i+1) allows reuse
+            current.pop()
+    backtrack(0, [], target)
+    return result
+
+print(combination_sum([2, 3, 6, 7], 7))
+# [[2, 2, 3], [7]]
+
+--- N-Queens Problem ---
+Place N queens on NxN board so no two queens attack each other.
+
+def solve_n_queens(n):
+    result = []
+    cols = set()
+    diag1 = set()  # row - col
+    diag2 = set()  # row + col
+
+    board = [['.' for _ in range(n)] for _ in range(n)]
+
+    def backtrack(row):
+        if row == n:
+            result.append([''.join(r) for r in board])
+            return
+        for col in range(n):
+            if col in cols or (row - col) in diag1 or (row + col) in diag2:
+                continue
+            cols.add(col)
+            diag1.add(row - col)
+            diag2.add(row + col)
+            board[row][col] = 'Q'
+            backtrack(row + 1)
+            cols.remove(col)         # backtrack
+            diag1.remove(row - col)
+            diag2.remove(row + col)
+            board[row][col] = '.'
+
+    backtrack(0)
+    return result
+
+solutions = solve_n_queens(4)
+print(f"Number of solutions for 4-Queens: {len(solutions)}")  # 2
+for sol in solutions:
+    for row in sol:
+        print(row)
+    print()
+
+--- Sudoku Solver ---
+Fill 9x9 grid so each row, column, and 3x3 box has digits 1-9.
+
+def solve_sudoku(board):
+    def is_valid(board, row, col, num):
+        num = str(num)
+        if num in board[row]:
+            return False
+        if num in [board[r][col] for r in range(9)]:
+            return False
+        box_r, box_c = 3 * (row // 3), 3 * (col // 3)
+        for r in range(box_r, box_r + 3):
+            for c in range(box_c, box_c + 3):
+                if board[r][c] == num:
+                    return False
+        return True
+
+    def backtrack():
+        for r in range(9):
+            for c in range(9):
+                if board[r][c] == '.':
+                    for num in range(1, 10):
+                        if is_valid(board, r, c, num):
+                            board[r][c] = str(num)
+                            if backtrack():
+                                return True
+                            board[r][c] = '.'  # backtrack
+                    return False
+        return True
+
+    backtrack()
+
+--- Word Search in Grid ---
+Find if word exists in 2D grid by moving up/down/left/right.
+
+def word_search(board, word):
+    rows, cols = len(board), len(board[0])
+
+    def backtrack(r, c, index):
+        if index == len(word):
+            return True
+        if r < 0 or r >= rows or c < 0 or c >= cols:
+            return False
+        if board[r][c] != word[index]:
+            return False
+        temp = board[r][c]
+        board[r][c] = '#'  # mark visited
+        found = (backtrack(r+1, c, index+1) or
+                 backtrack(r-1, c, index+1) or
+                 backtrack(r, c+1, index+1) or
+                 backtrack(r, c-1, index+1))
+        board[r][c] = temp  # backtrack (restore)
+        return found
+
+    for r in range(rows):
+        for c in range(cols):
+            if backtrack(r, c, 0):
+                return True
+    return False
+
+board = [["A","B","C","E"],["S","F","C","S"],["A","D","E","E"]]
+print(word_search(board, "ABCCED"))  # True
+print(word_search(board, "SEE"))     # True
+print(word_search(board, "ABCB"))    # False
+
+--- Rat in a Maze ---
+Find path from (0,0) to (n-1,n-1) in a grid (1=open, 0=blocked).
+
+def rat_in_maze(maze):
+    n = len(maze)
+    solution = [[0]*n for _ in range(n)]
+
+    def is_safe(r, c):
+        return 0 <= r < n and 0 <= c < n and maze[r][c] == 1
+
+    def solve(r, c):
+        if r == n-1 and c == n-1:
+            solution[r][c] = 1
+            return True
+        if is_safe(r, c):
+            solution[r][c] = 1
+            if solve(r+1, c): return True
+            if solve(r, c+1): return True
+            solution[r][c] = 0  # backtrack
+            return False
+        return False
+
+    if solve(0, 0):
+        return solution
+    return []
+
+maze = [[1,0,0,0],[1,1,0,1],[0,1,0,0],[1,1,1,1]]
+path = rat_in_maze(maze)
+for row in path:
+    print(row)
