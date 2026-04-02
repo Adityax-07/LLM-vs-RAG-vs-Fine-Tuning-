@@ -1,0 +1,204 @@
+TWO POINTERS AND SLIDING WINDOW
+================================
+
+--- TWO POINTERS TECHNIQUE ---
+Use two pointers (left and right) to scan an array from both ends or at different speeds.
+Reduces O(n^2) brute force to O(n).
+
+--- Two Sum (Sorted Array) ---
+Find two numbers that add up to target in a sorted array.
+Time: O(n). Space: O(1).
+
+def two_sum_sorted(arr, target):
+    left, right = 0, len(arr) - 1
+    while left < right:
+        total = arr[left] + arr[right]
+        if total == target:
+            return [left, right]
+        elif total < target:
+            left += 1
+        else:
+            right -= 1
+    return []
+
+print(two_sum_sorted([1, 2, 3, 4, 6], 6))  # [1, 3] (2+4)
+
+--- Reverse an Array In-Place ---
+def reverse_array(arr):
+    left, right = 0, len(arr) - 1
+    while left < right:
+        arr[left], arr[right] = arr[right], arr[left]
+        left += 1
+        right -= 1
+    return arr
+
+print(reverse_array([1, 2, 3, 4, 5]))  # [5, 4, 3, 2, 1]
+
+--- Remove Duplicates from Sorted Array ---
+Time: O(n). Space: O(1).
+
+def remove_duplicates(arr):
+    if not arr:
+        return 0
+    slow = 0
+    for fast in range(1, len(arr)):
+        if arr[fast] != arr[slow]:
+            slow += 1
+            arr[slow] = arr[fast]
+    return slow + 1  # length of unique part
+
+arr = [1, 1, 2, 2, 3, 4, 4]
+k = remove_duplicates(arr)
+print(arr[:k])  # [1, 2, 3, 4]
+
+--- Container With Most Water ---
+Find two lines that form container holding most water.
+Time: O(n). Space: O(1).
+
+def max_water(heights):
+    left, right = 0, len(heights) - 1
+    max_area = 0
+    while left < right:
+        area = min(heights[left], heights[right]) * (right - left)
+        max_area = max(max_area, area)
+        if heights[left] < heights[right]:
+            left += 1
+        else:
+            right -= 1
+    return max_area
+
+print(max_water([1,8,6,2,5,4,8,3,7]))  # Output: 49
+
+--- Three Sum ---
+Find all triplets that sum to zero.
+Time: O(n^2). Space: O(n).
+
+def three_sum(nums):
+    nums.sort()
+    result = []
+    for i in range(len(nums) - 2):
+        if i > 0 and nums[i] == nums[i-1]:
+            continue  # skip duplicates
+        left, right = i + 1, len(nums) - 1
+        while left < right:
+            total = nums[i] + nums[left] + nums[right]
+            if total == 0:
+                result.append([nums[i], nums[left], nums[right]])
+                while left < right and nums[left] == nums[left+1]: left += 1
+                while left < right and nums[right] == nums[right-1]: right -= 1
+                left += 1
+                right -= 1
+            elif total < 0:
+                left += 1
+            else:
+                right -= 1
+    return result
+
+print(three_sum([-1, 0, 1, 2, -1, -4]))
+# [[-1, -1, 2], [-1, 0, 1]]
+
+--- Trapping Rain Water ---
+Calculate water trapped between bars.
+Time: O(n). Space: O(1).
+
+def trap_water(height):
+    left, right = 0, len(height) - 1
+    left_max = right_max = 0
+    water = 0
+    while left < right:
+        if height[left] < height[right]:
+            if height[left] >= left_max:
+                left_max = height[left]
+            else:
+                water += left_max - height[left]
+            left += 1
+        else:
+            if height[right] >= right_max:
+                right_max = height[right]
+            else:
+                water += right_max - height[right]
+            right -= 1
+    return water
+
+print(trap_water([0,1,0,2,1,0,1,3,2,1,2,1]))  # Output: 6
+
+--- Slow/Fast Pointer: Detect Cycle ---
+def has_cycle(head):
+    slow = fast = head
+    while fast and fast.next:
+        slow = slow.next
+        fast = fast.next.next
+        if slow == fast:
+            return True
+    return False
+
+--- SLIDING WINDOW TECHNIQUE ---
+Maintain a window of fixed or variable size. Slide it across array.
+Avoids recomputing the entire window each step.
+
+--- Maximum Sum Subarray of Size K (Fixed Window) ---
+Time: O(n). Space: O(1).
+
+def max_sum_subarray(arr, k):
+    window_sum = sum(arr[:k])
+    max_sum = window_sum
+    for i in range(k, len(arr)):
+        window_sum += arr[i] - arr[i - k]
+        max_sum = max(max_sum, window_sum)
+    return max_sum
+
+print(max_sum_subarray([2,1,5,1,3,2], 3))  # Output: 9 (5+1+3)
+
+--- Longest Substring Without Repeating Characters (Variable Window) ---
+Time: O(n). Space: O(k) where k = charset size.
+
+def length_of_longest_substring(s):
+    char_index = {}
+    left = 0
+    max_len = 0
+    for right, ch in enumerate(s):
+        if ch in char_index and char_index[ch] >= left:
+            left = char_index[ch] + 1
+        char_index[ch] = right
+        max_len = max(max_len, right - left + 1)
+    return max_len
+
+print(length_of_longest_substring("abcabcbb"))  # 3 (abc)
+print(length_of_longest_substring("pwwkew"))    # 3 (wke)
+
+--- Minimum Size Subarray Sum ---
+Find smallest subarray with sum >= target.
+Time: O(n). Space: O(1).
+
+def min_subarray_len(target, nums):
+    left = 0
+    curr_sum = 0
+    min_len = float('inf')
+    for right in range(len(nums)):
+        curr_sum += nums[right]
+        while curr_sum >= target:
+            min_len = min(min_len, right - left + 1)
+            curr_sum -= nums[left]
+            left += 1
+    return min_len if min_len != float('inf') else 0
+
+print(min_subarray_len(7, [2,3,1,2,4,3]))  # Output: 2 (4+3)
+
+--- Longest Substring with K Distinct Characters ---
+Time: O(n). Space: O(k).
+
+def longest_k_distinct(s, k):
+    from collections import defaultdict
+    char_count = defaultdict(int)
+    left = max_len = 0
+    for right, ch in enumerate(s):
+        char_count[ch] += 1
+        while len(char_count) > k:
+            char_count[s[left]] -= 1
+            if char_count[s[left]] == 0:
+                del char_count[s[left]]
+            left += 1
+        max_len = max(max_len, right - left + 1)
+    return max_len
+
+print(longest_k_distinct("araaci", 2))  # Output: 4 (araa)

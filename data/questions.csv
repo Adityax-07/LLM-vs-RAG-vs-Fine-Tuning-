@@ -1,0 +1,51 @@
+id,question
+1,What is binary search?
+2,What is the time complexity of binary search?
+3,When can you use binary search?
+4,Explain bubble sort.
+5,What is the difference between stack and queue?
+6,What is LIFO?
+7,What is FIFO?
+8,Explain merge sort.
+9,What is quicksort?
+10,What is the worst case time complexity of quicksort?
+11,What is a linked list?
+12,What is the difference between array and linked list?
+13,What is a doubly linked list?
+14,What is a binary tree?
+15,What is a Binary Search Tree?
+16,What is inorder traversal?
+17,What is the difference between BFS and DFS?
+18,What is dynamic programming?
+19,What is memoization?
+20,What is the difference between memoization and tabulation?
+21,Explain the coin change problem.
+22,What is React?
+23,What are React hooks?
+24,What is useState in React?
+25,What is useEffect in React?
+26,What is a REST API?
+27,What HTTP methods does REST use?
+28,What does HTTP status code 404 mean?
+29,What does HTTP status code 200 mean?
+30,What is CSS Flexbox?
+31,What does justify-content do in Flexbox?
+32,What is a JavaScript Promise?
+33,What are the three states of a Promise?
+34,What is async/await in JavaScript?
+35,What is Promise.all()?
+36,What is insertion sort?
+37,What is heap sort?
+38,What is a graph in data structures?
+39,What is Dijkstra algorithm?
+40,What is topological sort?
+41,What is the difference between stack and heap memory?
+42,What is a circular linked list?
+43,What is an AVL tree?
+44,What is the difference between preorder and postorder traversal?
+45,What is the knapsack problem?
+46,What is the longest common subsequence?
+47,What is flex-grow in CSS?
+48,What is useContext in React?
+49,What is useRef in React?
+50,What is the difference between PUT and PATCH in REST?

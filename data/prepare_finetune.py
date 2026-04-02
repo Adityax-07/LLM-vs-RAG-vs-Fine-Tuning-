@@ -1,0 +1,91 @@
+import json
+import os
+
+qa_pairs = [
+    {"instruction": "What is binary search?",
+     "input": "",
+     "output": "Binary search is an efficient searching algorithm for sorted arrays. It works by repeatedly dividing the search interval in half. Time complexity: O(log n), Space complexity: O(1). Requires the array to be sorted beforehand."},
+
+    {"instruction": "What is the time complexity of binary search?",
+     "input": "",
+     "output": "Binary search has a time complexity of O(log n) because it halves the search space with each step. Best case is O(1) when the middle element is the target. Space complexity is O(1) for iterative implementation."},
+
+    {"instruction": "What is the difference between stack and queue?",
+     "input": "",
+     "output": "Stack uses LIFO (Last In First Out) - the last element added is the first to be removed. Operations: push and pop. Queue uses FIFO (First In First Out) - the first element added is the first to be removed. Operations: enqueue and dequeue. Both have O(1) operations."},
+
+    {"instruction": "Explain merge sort.",
+     "input": "",
+     "output": "Merge sort is a divide-and-conquer sorting algorithm. It splits the array in half, recursively sorts each half, then merges the two sorted halves. Time complexity: O(n log n) in all cases. Space complexity: O(n). It is a stable sorting algorithm, making it good for sorting linked lists."},
+
+    {"instruction": "What is quicksort?",
+     "input": "",
+     "output": "Quicksort is a divide-and-conquer algorithm that picks a pivot element and partitions the array into elements less than and greater than the pivot, then recursively sorts each partition. Average time: O(n log n), Worst case: O(n^2) when pivot is always smallest or largest element. Space: O(log n)."},
+
+    {"instruction": "What is a linked list?",
+     "input": "",
+     "output": "A linked list is a linear data structure where elements are stored in nodes. Each node contains data and a pointer to the next node. Types: Singly (one direction), Doubly (both directions), Circular (last points to first). Advantage: dynamic size, O(1) insertion at head. Disadvantage: no random access, O(n) search."},
+
+    {"instruction": "What is a Binary Search Tree?",
+     "input": "",
+     "output": "A Binary Search Tree (BST) is a binary tree where for every node, all values in the left subtree are less than the node's value, and all values in the right subtree are greater. This property enables O(log n) average search, insert, and delete operations. Worst case is O(n) for unbalanced trees."},
+
+    {"instruction": "What is dynamic programming?",
+     "input": "",
+     "output": "Dynamic programming solves complex problems by breaking them into overlapping subproblems and storing results to avoid recomputation. Two approaches: Memoization (top-down, recursion with cache) and Tabulation (bottom-up, iterative). Requires optimal substructure and overlapping subproblems. Examples: Fibonacci, Knapsack, LCS, Coin Change."},
+
+    {"instruction": "What are React hooks?",
+     "input": "",
+     "output": "React hooks are functions that let you use state and lifecycle features in functional components, introduced in React 16.8. Key hooks: useState for state management, useEffect for side effects like API calls, useContext for consuming context, useRef for DOM references. Rules: only call hooks at top level, only in React functions."},
+
+    {"instruction": "What is useState in React?",
+     "input": "",
+     "output": "useState is a React hook for managing local component state. Syntax: const [state, setState] = useState(initialValue). It returns the current state value and a setter function. Calling setState triggers a re-render with the new value. Example: const [count, setCount] = useState(0) then setCount(count + 1) to increment."},
+
+    {"instruction": "What is useEffect in React?",
+     "input": "",
+     "output": "useEffect is a React hook for handling side effects like API calls, subscriptions, and DOM updates. It runs after every render by default. The dependency array controls when it runs: empty array [] runs only on mount, [value] runs when value changes. Return a cleanup function to run on unmount. Syntax: useEffect(() => { effect }, [deps])."},
+
+    {"instruction": "What is a REST API?",
+     "input": "",
+     "output": "REST API (Representational State Transfer) is an architectural style for web services using standard HTTP methods. GET retrieves resources, POST creates new resources, PUT updates resources completely, PATCH partially updates, DELETE removes resources. REST is stateless meaning each request contains all needed information. JSON is the most common response format."},
+
+    {"instruction": "What HTTP methods does REST use?",
+     "input": "",
+     "output": "REST uses five main HTTP methods: GET for reading/retrieving data, POST for creating new resources, PUT for completely updating an existing resource, PATCH for partially updating a resource, and DELETE for removing a resource. These map to CRUD operations: Create (POST), Read (GET), Update (PUT/PATCH), Delete (DELETE)."},
+
+    {"instruction": "What does HTTP status code 404 mean?",
+     "input": "",
+     "output": "HTTP status code 404 means Not Found. It indicates the server cannot find the requested resource. The URL may be wrong, the resource may have been deleted, or it may never have existed. Other important codes: 200 (OK), 201 (Created), 400 (Bad Request), 401 (Unauthorized), 403 (Forbidden), 500 (Internal Server Error)."},
+
+    {"instruction": "What is CSS Flexbox?",
+     "input": "",
+     "output": "CSS Flexbox is a layout model that makes it easy to arrange items in a container. Activated by display: flex on the container. Key properties: flex-direction (row or column), justify-content (main axis alignment: flex-start, center, space-between), align-items (cross axis: stretch, center, flex-start), flex-wrap (allow wrapping). Items can have flex-grow to fill available space."},
+
+    {"instruction": "What is a JavaScript Promise?",
+     "input": "",
+     "output": "A JavaScript Promise represents an asynchronous operation with three states: pending (initial), fulfilled (success), rejected (failure). Created with new Promise((resolve, reject) => {}). Consumed with .then() for success and .catch() for errors. async/await is syntactic sugar that makes promises look synchronous. Promise.all() runs multiple promises in parallel."},
+
+    {"instruction": "What is inorder traversal?",
+     "input": "",
+     "output": "Inorder traversal visits tree nodes in Left, Root, Right order. For a Binary Search Tree, inorder traversal produces nodes in ascending sorted order. Algorithm: recursively visit left subtree, then process current node, then recursively visit right subtree. Time complexity: O(n) where n is number of nodes."},
+
+    {"instruction": "What is the difference between BFS and DFS?",
+     "input": "",
+     "output": "BFS (Breadth-First Search) explores level by level using a queue data structure. It finds shortest path in unweighted graphs. DFS (Depth-First Search) explores as deep as possible using a stack or recursion. BFS is better for shortest path problems; DFS is better for cycle detection, topological sort, and finding connected components. Both have O(V+E) time complexity."},
+
+    {"instruction": "What is memoization?",
+     "input": "",
+     "output": "Memoization is a top-down dynamic programming technique that caches results of expensive function calls and returns the cached result when the same inputs occur again. It uses recursion combined with a hash map or array to store computed values. For example, Fibonacci with memoization runs in O(n) instead of O(2^n). It trades space for time."},
+
+    {"instruction": "What is flex-grow in CSS?",
+     "input": "",
+     "output": "flex-grow is a CSS Flexbox property that defines how much a flex item grows relative to other items when extra space is available in the container. A value of 0 means the item will not grow. A value of 1 means the item takes equal share of available space. If one item has flex-grow: 2 and another has flex-grow: 1, the first gets twice as much extra space."},
+]
+
+output_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "finetune_data.jsonl")
+with open(output_path, "w", encoding="utf-8") as f:
+    for pair in qa_pairs:
+        f.write(json.dumps(pair) + "\n")
+
+print(f"Saved {len(qa_pairs)} training examples to data/finetune_data.jsonl")

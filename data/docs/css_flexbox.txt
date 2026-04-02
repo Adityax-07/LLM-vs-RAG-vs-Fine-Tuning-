@@ -1,0 +1,17 @@
+CSS Flexbox (Flexible Box Layout) is a layout model for arranging items in a container.
+Activated by setting display: flex on a container element.
+
+Container properties:
+- flex-direction: row (default, horizontal) or column (vertical).
+- justify-content: aligns items on main axis. Values: flex-start, flex-end, center, space-between, space-around.
+- align-items: aligns items on cross axis. Values: stretch (default), flex-start, flex-end, center.
+- flex-wrap: nowrap (default) or wrap to allow items to move to next line.
+- gap: space between flex items.
+
+Item properties:
+- flex-grow: how much item grows relative to siblings. 0 means no grow.
+- flex-shrink: how much item shrinks when space is limited.
+- flex-basis: initial size of item before flex calculations.
+- align-self: overrides align-items for a single item.
+
+Shorthand: flex: grow shrink basis (e.g., flex: 1 1 auto)

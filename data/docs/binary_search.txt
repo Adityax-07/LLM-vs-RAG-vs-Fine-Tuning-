@@ -1,0 +1,130 @@
+SEARCHING ALGORITHMS
+====================
+
+--- Linear Search ---
+Check every element one by one until the target is found.
+Time: O(n). Space: O(1). Works on unsorted arrays.
+
+def linear_search(arr, target):
+    for i, val in enumerate(arr):
+        if val == target:
+            return i
+    return -1
+
+print(linear_search([5, 3, 8, 1, 9], 8))  # Output: 2
+print(linear_search([5, 3, 8, 1, 9], 7))  # Output: -1
+
+--- Binary Search ---
+Works on SORTED arrays. Compare target with middle element.
+If smaller, search left half. If larger, search right half.
+Time: O(log n). Space: O(1) iterative, O(log n) recursive.
+
+# Iterative
+def binary_search(arr, target):
+    low, high = 0, len(arr) - 1
+    while low <= high:
+        mid = (low + high) // 2
+        if arr[mid] == target:
+            return mid
+        elif arr[mid] < target:
+            low = mid + 1
+        else:
+            high = mid - 1
+    return -1
+
+arr = [1, 3, 5, 7, 9, 11, 13]
+print(binary_search(arr, 7))   # Output: 3
+print(binary_search(arr, 10))  # Output: -1
+
+# Recursive
+def binary_search_recursive(arr, target, low, high):
+    if low > high:
+        return -1
+    mid = (low + high) // 2
+    if arr[mid] == target:
+        return mid
+    elif arr[mid] < target:
+        return binary_search_recursive(arr, target, mid + 1, high)
+    else:
+        return binary_search_recursive(arr, target, low, mid - 1)
+
+arr = [2, 4, 6, 8, 10, 12]
+print(binary_search_recursive(arr, 10, 0, len(arr) - 1))  # Output: 4
+
+--- Find First and Last Position ---
+Find first and last occurrence of target in sorted array.
+
+def find_first(arr, target):
+    low, high, result = 0, len(arr) - 1, -1
+    while low <= high:
+        mid = (low + high) // 2
+        if arr[mid] == target:
+            result = mid
+            high = mid - 1  # keep searching left
+        elif arr[mid] < target:
+            low = mid + 1
+        else:
+            high = mid - 1
+    return result
+
+def find_last(arr, target):
+    low, high, result = 0, len(arr) - 1, -1
+    while low <= high:
+        mid = (low + high) // 2
+        if arr[mid] == target:
+            result = mid
+            low = mid + 1  # keep searching right
+        elif arr[mid] < target:
+            low = mid + 1
+        else:
+            high = mid - 1
+    return result
+
+arr = [1, 2, 2, 2, 3, 4]
+print(find_first(arr, 2))  # Output: 1
+print(find_last(arr, 2))   # Output: 3
+
+--- Search in Rotated Sorted Array ---
+Array was sorted then rotated (e.g., [4,5,6,7,0,1,2]).
+
+def search_rotated(arr, target):
+    low, high = 0, len(arr) - 1
+    while low <= high:
+        mid = (low + high) // 2
+        if arr[mid] == target:
+            return mid
+        if arr[low] <= arr[mid]:  # left half sorted
+            if arr[low] <= target < arr[mid]:
+                high = mid - 1
+            else:
+                low = mid + 1
+        else:  # right half sorted
+            if arr[mid] < target <= arr[high]:
+                low = mid + 1
+            else:
+                high = mid - 1
+    return -1
+
+print(search_rotated([4, 5, 6, 7, 0, 1, 2], 0))  # Output: 4
+print(search_rotated([4, 5, 6, 7, 0, 1, 2], 3))  # Output: -1
+
+--- Square Root using Binary Search ---
+Find integer square root of a number without using sqrt().
+
+def sqrt_binary(n):
+    if n < 2:
+        return n
+    low, high, result = 1, n // 2, 0
+    while low <= high:
+        mid = (low + high) // 2
+        if mid * mid == n:
+            return mid
+        elif mid * mid < n:
+            result = mid
+            low = mid + 1
+        else:
+            high = mid - 1
+    return result
+
+print(sqrt_binary(16))  # Output: 4
+print(sqrt_binary(20))  # Output: 4 (floor)
