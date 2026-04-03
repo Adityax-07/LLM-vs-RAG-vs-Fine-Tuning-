@@ -1,0 +1,38 @@
+Big O Notation and Time Complexity
+
+Big O notation describes the upper bound of an algorithm's time or space complexity as input size (n) grows. It answers: "How does performance scale?"
+
+Common Complexities (best to worst):
+- O(1) – Constant: always same time. Example: array index access, hash map lookup.
+- O(log n) – Logarithmic: halves problem each step. Example: binary search, balanced BST operations.
+- O(n) – Linear: proportional to input. Example: linear search, single loop over array.
+- O(n log n) – Linearithmic: divide and conquer sorts. Example: merge sort, heap sort, quick sort (average).
+- O(n²) – Quadratic: nested loops. Example: bubble sort, insertion sort, selection sort.
+- O(2^n) – Exponential: doubles with each addition. Example: recursive Fibonacci, subset generation.
+- O(n!) – Factorial: permutations. Example: brute-force traveling salesman.
+
+Rules for calculating Big O:
+1. Drop constants: O(2n) → O(n)
+2. Drop lower-order terms: O(n² + n) → O(n²)
+3. Different inputs = different variables: two arrays of size a and b → O(a + b) not O(n²)
+
+Space Complexity:
+- Also uses Big O notation
+- Measures extra memory used by the algorithm (not including input)
+- Example: merge sort uses O(n) extra space for the merge step
+
+Best, Average, Worst Case:
+- Best case (Ω): minimum operations needed (often not useful)
+- Average case (Θ): expected operations for random input
+- Worst case (O): maximum operations (most commonly used for guarantees)
+
+Amortized Analysis:
+- Average cost per operation over a sequence
+- Example: dynamic array append is O(1) amortized even though occasional resize is O(n)
+
+Common Data Structure Operations:
+- Array: access O(1), search O(n), insert/delete O(n)
+- Linked List: access O(n), search O(n), insert/delete at head O(1)
+- Hash Table: search/insert/delete average O(1), worst O(n)
+- BST (balanced): search/insert/delete O(log n)
+- Heap: insert O(log n), get-min/max O(1), delete O(log n)

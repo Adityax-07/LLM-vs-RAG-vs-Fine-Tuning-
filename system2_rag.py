@@ -1,7 +1,8 @@
 import os
+import glob as glob_module
 import time
 from dotenv import load_dotenv
-from langchain_community.document_loaders import DirectoryLoader, TextLoader
+from langchain_community.document_loaders import DirectoryLoader, TextLoader, PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -16,7 +17,8 @@ client = OpenAI(
 
 MODEL = "llama-3.1-8b-instant"
 
-DOCS_PATH = "data/docs"
+DOCS_PATH  = "data/docs"
+PDFS_PATH  = "data/pdfs"
 INDEX_PATH = "data/faiss_index"
 EMBED_MODEL = "all-MiniLM-L6-v2"
 
@@ -27,11 +29,24 @@ SYSTEM_PROMPT = (
 
 
 def build_vectorstore() -> FAISS:
-    print("Loading documents...")
+    # Load .txt documents
+    print("Loading text documents...")
     loader = DirectoryLoader(DOCS_PATH, glob="**/*.txt", loader_cls=TextLoader,
                              loader_kwargs={"encoding": "utf-8"})
     documents = loader.load()
-    print(f"Loaded {len(documents)} documents.")
+    print(f"  Loaded {len(documents)} text files.")
+
+    # Load PDFs from data/pdfs/ if any exist
+    pdf_files = glob_module.glob(os.path.join(PDFS_PATH, "**/*.pdf"), recursive=True)
+    for pdf_path in pdf_files:
+        try:
+            pdf_loader = PyPDFLoader(pdf_path)
+            documents.extend(pdf_loader.load())
+            print(f"  Loaded PDF: {os.path.basename(pdf_path)}")
+        except Exception as e:
+            print(f"  Warning: Could not load {pdf_path}: {e}")
+
+    print(f"Total documents loaded: {len(documents)} ({len(pdf_files)} PDFs)")
 
     splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=60)
     chunks = splitter.split_documents(documents)
@@ -52,7 +67,6 @@ def load_vectorstore() -> FAISS:
 def ask_rag(question: str, vectorstore: FAISS) -> dict:
     start = time.time()
 
-    # Retrieve top-3 relevant chunks
     docs = vectorstore.similarity_search(question, k=3)
     context = "\n\n".join([doc.page_content for doc in docs])
 

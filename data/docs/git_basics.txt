@@ -1,0 +1,62 @@
+Git Basics
+
+Git is a distributed version control system that tracks changes in source code over time.
+
+Setup:
+  git config --global user.name "Your Name"
+  git config --global user.email "you@example.com"
+
+Core Workflow:
+  git init              — initialize a new repository
+  git clone <url>       — copy a remote repository locally
+  git status            — show working tree status (staged, unstaged, untracked)
+  git add <file>        — stage a file for commit
+  git add .             — stage all changes
+  git commit -m "msg"   — save staged changes with a message
+  git push origin main  — push commits to remote
+  git pull              — fetch and merge from remote
+
+Branching:
+  git branch              — list all local branches
+  git branch feature-x    — create a new branch
+  git checkout feature-x  — switch to branch (older syntax)
+  git switch feature-x    — switch to branch (newer syntax)
+  git checkout -b feature-x  — create and switch in one step
+  git merge feature-x     — merge branch into current branch
+  git branch -d feature-x — delete a branch (after merge)
+
+Remote:
+  git remote -v            — show remote URLs
+  git remote add origin <url>  — add a remote
+  git fetch origin         — download remote changes (don't merge)
+  git pull origin main     — fetch + merge remote main into current branch
+
+Undoing Changes:
+  git restore <file>          — discard unstaged changes in a file
+  git restore --staged <file> — unstage a file
+  git revert <commit>         — create a new commit that undoes a commit (safe)
+  git reset --soft HEAD~1     — undo last commit, keep changes staged
+  git reset --hard HEAD~1     — undo last commit AND discard changes (destructive)
+
+Viewing History:
+  git log                 — full commit history
+  git log --oneline       — compact one-line per commit
+  git diff                — show unstaged changes
+  git diff --staged       — show staged changes
+  git show <commit>       — show changes in a specific commit
+
+Stashing:
+  git stash               — temporarily save uncommitted changes
+  git stash pop           — restore last stash and remove it
+  git stash list          — show all stashes
+
+Rebasing vs Merging:
+- Merge: creates a merge commit, preserves history of both branches
+- Rebase: replays commits on top of another branch, creates linear history
+  git rebase main         — rebase current branch onto main
+- Rule: never rebase commits that have been pushed to a shared remote
+
+.gitignore:
+- Lists files/patterns Git should not track
+- Common entries: node_modules/, __pycache__/, .env, *.pyc, dist/, build/
+- Check gitignore.io for language-specific templates

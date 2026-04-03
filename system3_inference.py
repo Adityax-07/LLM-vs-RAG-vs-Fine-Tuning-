@@ -4,6 +4,8 @@ After running system3_finetune_colab.ipynb on Google Colab:
   1. Download finetuned_model.zip from Colab
   2. Unzip into this project root as finetuned_model/
   3. Then run this file
+
+Base model: Qwen/Qwen2.5-1.5B-Instruct (upgraded from TinyLlama)
 """
 import os
 import time
@@ -11,7 +13,7 @@ import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from peft import PeftModel
 
-BASE_MODEL = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+BASE_MODEL = "Qwen/Qwen2.5-1.5B-Instruct"
 FINETUNED_PATH = "./finetuned_model"
 
 _model = None
@@ -25,7 +27,10 @@ def load_model():
 
     print("Loading fine-tuned model (this takes ~30s first time)...")
     _tokenizer = AutoTokenizer.from_pretrained(FINETUNED_PATH)
-    base = AutoModelForCausalLM.from_pretrained(BASE_MODEL, torch_dtype=torch.float32)
+    base = AutoModelForCausalLM.from_pretrained(
+        BASE_MODEL,
+        torch_dtype=torch.float32,
+    )
     _model = PeftModel.from_pretrained(base, FINETUNED_PATH)
     _model.eval()
     print("Fine-tuned model ready.")
@@ -44,19 +49,32 @@ def ask_finetuned(question: str) -> dict:
     model, tokenizer = load_model()
     start = time.time()
 
-    prompt = f"### Instruction:\n{question}\n\n### Response:\n"
-    inputs = tokenizer(prompt, return_tensors="pt")
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a programming tutor specializing in Data Structures, "
+                "Algorithms, and Web Development. Answer questions clearly and concisely."
+            ),
+        },
+        {"role": "user", "content": question},
+    ]
+
+    text = tokenizer.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=True
+    )
+    inputs = tokenizer([text], return_tensors="pt")
 
     with torch.no_grad():
         outputs = model.generate(
             **inputs,
-            max_new_tokens=100,
+            max_new_tokens=150,
             do_sample=False,
             pad_token_id=tokenizer.eos_token_id,
         )
 
-    full_output = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    answer = full_output.split("### Response:\n")[-1].strip()
+    generated_ids = outputs[0][inputs.input_ids.shape[1]:]
+    answer = tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
     elapsed = round(time.time() - start, 2)
 
     return {

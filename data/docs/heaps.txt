@@ -1,0 +1,46 @@
+Heaps and Priority Queues
+
+A heap is a complete binary tree that satisfies the heap property:
+- Min-Heap: every parent node is smaller than or equal to its children. Root is the minimum.
+- Max-Heap: every parent node is greater than or equal to its children. Root is the maximum.
+
+Heap Properties:
+- Complete binary tree: all levels fully filled except possibly the last, filled left to right.
+- Stored efficiently as an array: for node at index i, left child = 2i+1, right child = 2i+2, parent = (i-1)//2.
+
+Core Operations and Complexities:
+- Insert (push): Add at end, bubble up (heapify up). O(log n)
+- Get min/max: Return root. O(1)
+- Remove min/max (pop): Replace root with last element, bubble down (heapify down). O(log n)
+- Build heap from array (heapify): O(n) — better than inserting one by one O(n log n)
+- Search: O(n) — heaps do not support efficient search
+
+Priority Queue:
+- Abstract data type where each element has a priority
+- Element with highest (or lowest) priority is dequeued first
+- Implemented with a heap
+- Python: use `heapq` module (min-heap by default)
+  - heapq.heappush(heap, item)
+  - heapq.heappop(heap) — removes and returns smallest
+  - heapq.heapify(list) — converts list to heap in O(n)
+  - For max-heap in Python: negate values (push -val, pop and negate result)
+
+Common Use Cases:
+- Dijkstra's shortest path algorithm
+- Prim's minimum spanning tree
+- K largest / K smallest elements
+- Merge K sorted lists
+- Task scheduling / job queues
+- Median maintenance (two heaps: max-heap for lower half, min-heap for upper half)
+
+Heap Sort:
+1. Build a max-heap from the array: O(n)
+2. Repeatedly extract max and place at end: O(n log n)
+3. Total: O(n log n) time, O(1) space (in-place)
+- Not stable (doesn't preserve relative order of equal elements)
+
+Example — K largest elements using min-heap of size K:
+- Maintain a min-heap of the K largest seen so far
+- For each element, push it; if heap size > K, pop the smallest
+- Final heap contains K largest elements
+- Time: O(n log k), Space: O(k)
