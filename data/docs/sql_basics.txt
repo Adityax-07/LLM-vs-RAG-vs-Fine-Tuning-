@@ -1,0 +1,61 @@
+SQL Basics
+
+SQL (Structured Query Language) is used to manage and query relational databases.
+
+Core Statements:
+- SELECT: retrieve data
+- INSERT: add new rows
+- UPDATE: modify existing rows
+- DELETE: remove rows
+- CREATE TABLE: define a new table
+- DROP TABLE: delete a table
+
+SELECT Syntax:
+  SELECT column1, column2 FROM table_name WHERE condition ORDER BY column LIMIT n;
+- SELECT *: selects all columns (avoid in production for performance)
+- DISTINCT: removes duplicate rows — SELECT DISTINCT city FROM users
+- WHERE: filters rows — WHERE age > 18 AND country = 'India'
+- ORDER BY: sorts results — ORDER BY name ASC / DESC
+- LIMIT: restricts number of rows returned — LIMIT 10
+
+Aggregate Functions:
+- COUNT(*): number of rows
+- SUM(col): total of numeric column
+- AVG(col): average value
+- MIN(col) / MAX(col): minimum and maximum values
+- Used with GROUP BY to aggregate per group
+
+GROUP BY and HAVING:
+  SELECT department, AVG(salary) FROM employees GROUP BY department HAVING AVG(salary) > 50000;
+- GROUP BY groups rows sharing a value into summary rows
+- HAVING filters groups (like WHERE but for aggregates)
+
+JOINs — combining tables:
+- INNER JOIN: only rows with matching values in both tables
+- LEFT JOIN: all rows from left table, matched rows from right (NULL if no match)
+- RIGHT JOIN: all rows from right table, matched rows from left
+- FULL OUTER JOIN: all rows from both tables
+
+  SELECT orders.id, users.name FROM orders INNER JOIN users ON orders.user_id = users.id;
+
+Subqueries:
+  SELECT name FROM employees WHERE salary > (SELECT AVG(salary) FROM employees);
+- Can appear in WHERE, FROM, or SELECT clause
+
+Indexes:
+- Speed up SELECT queries at the cost of slower INSERT/UPDATE/DELETE
+- CREATE INDEX idx_name ON table(column)
+- Automatically created on PRIMARY KEY and UNIQUE columns
+- Avoid over-indexing — each index takes storage and slows writes
+
+Constraints:
+- PRIMARY KEY: uniquely identifies each row
+- FOREIGN KEY: links to primary key of another table (enforces referential integrity)
+- UNIQUE: no duplicate values in column
+- NOT NULL: column cannot have NULL value
+- CHECK: enforces a condition on column values
+
+Transactions:
+- BEGIN / COMMIT / ROLLBACK
+- ACID properties: Atomicity, Consistency, Isolation, Durability
+- All statements in a transaction succeed together or all fail together

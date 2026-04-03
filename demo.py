@@ -1,6 +1,9 @@
 import os
+import json
+import numpy as np
 import streamlit as st
 import streamlit.components.v1 as components
+import plotly.graph_objects as go
 from system1_baseline import ask_baseline
 from system2_rag import ask_rag, load_vectorstore, build_vectorstore
 
@@ -16,6 +19,7 @@ if "last_results"     not in st.session_state: st.session_state.last_results    
 if "rating_submitted" not in st.session_state: st.session_state.rating_submitted = False
 if "input_question"   not in st.session_state: st.session_state.input_question   = ""
 if "auto_run"         not in st.session_state: st.session_state.auto_run         = False
+if "auto_metrics"     not in st.session_state: st.session_state.auto_metrics     = {}
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
 st.markdown("""<style>
@@ -281,6 +285,20 @@ div[data-testid="stTextInput"] label {
 .badge-grey   { background: rgba(100,116,139,.1); color: #64748b; border: 1px solid rgba(100,116,139,.25); }
 .metric-note  { color: #334155; font-size: 11px; font-weight: 400; }
 
+/* ── Auto-metric chips ───────────────────────────────────────── */
+.rouge-chip { font-size:11px; font-weight:600; padding:3px 9px; border-radius:99px;
+    background:rgba(251,191,36,.08); color:#fbbf24; border:1px solid rgba(251,191,36,.2); }
+.sim-chip   { font-size:11px; font-weight:600; padding:3px 9px; border-radius:99px;
+    background:rgba(244,114,182,.08); color:#f472b6; border:1px solid rgba(244,114,182,.2); }
+
+/* ── Tabs ────────────────────────────────────────────────────── */
+div[data-testid="stTabs"] button[data-baseweb="tab"] {
+    font-weight: 600; font-size: 13px; color: #475569;
+}
+div[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
+    color: #e2e8f0;
+}
+
 /* ── Scrollbar ───────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: #080d1a; }
@@ -319,6 +337,41 @@ def get_vectorstore():
     return load_vectorstore()
 
 vs = get_vectorstore()
+
+# ── Reference answers + auto-metrics ─────────────────────────────────────────
+@st.cache_data
+def load_reference_answers():
+    path = "data/reference_answers.json"
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+ref_answers = load_reference_answers()
+
+def compute_auto_metrics(answer: str, question: str) -> dict:
+    ref = ref_answers.get(question.strip().lower())
+    if not ref or not answer:
+        return {}
+    try:
+        from rouge_score import rouge_scorer as rs
+        scorer = rs.RougeScorer(["rougeL"], use_stemmer=True)
+        rouge_l = round(scorer.score(ref, answer)["rougeL"].fmeasure, 3)
+        r_emb = np.array(vs.embeddings.embed_query(ref))
+        a_emb = np.array(vs.embeddings.embed_query(answer))
+        norm = np.linalg.norm(r_emb) * np.linalg.norm(a_emb)
+        sem_sim = round(float(np.dot(r_emb, a_emb) / (norm + 1e-8)), 3)
+        return {"rouge_l": rouge_l, "sem_sim": max(0.0, sem_sim)}
+    except Exception:
+        return {}
+
+def metric_chips(m: dict) -> str:
+    if not m:
+        return ""
+    return (
+        f'<span class="rouge-chip">ROUGE-L {m["rouge_l"]:.3f}</span>'
+        f'<span class="sim-chip">Sem.Sim {m["sem_sim"]:.3f}</span>'
+    )
 
 # ── 3D Particle background ────────────────────────────────────────────────────
 components.html("""
@@ -480,6 +533,11 @@ if (run_clicked or st.session_state.auto_run) and question:
         "question": question,
         "r1": r1, "r2": r2, "r3": r3,
     }
+    st.session_state.auto_metrics = {
+        "r1": compute_auto_metrics(r1["answer"], question),
+        "r2": compute_auto_metrics(r2["answer"], question),
+        "r3": compute_auto_metrics(r3["answer"], question),
+    }
 
 # ── Render answers ────────────────────────────────────────────────────────────
 if st.session_state.last_results:
@@ -495,6 +553,8 @@ if st.session_state.last_results:
 
     col1, col2, col3 = st.columns(3)
 
+    m = st.session_state.auto_metrics
+
     with col1:
         st.markdown(f"""
         <div class="card card-blue">
@@ -509,6 +569,7 @@ if st.session_state.last_results:
                 <div class="card-answer">{r1['answer']}</div>
                 <div class="card-meta">
                     <span class="time-chip">⏱ {r1['response_time']}s</span>
+                    {metric_chips(m.get('r1', {}))}
                 </div>
             </div>
         </div>
@@ -532,6 +593,7 @@ if st.session_state.last_results:
                 </div>
                 <div class="card-meta">
                     <span class="time-chip">⏱ {r2['response_time']}s</span>
+                    {metric_chips(m.get('r2', {}))}
                 </div>
             </div>
         </div>
@@ -545,7 +607,7 @@ if st.session_state.last_results:
                     <span class="card-icon">🧠</span>
                     <div>
                         <div class="card-title">System 3 — Fine-Tuned Model</div>
-                        <div class="card-subtitle">TinyLlama · LoRA fine-tuning</div>
+                        <div class="card-subtitle">Qwen2.5-1.5B · LoRA fine-tuning</div>
                     </div>
                 </div>
                 <div class="card-body">
@@ -564,13 +626,14 @@ if st.session_state.last_results:
                     <span class="card-icon">🧠</span>
                     <div>
                         <div class="card-title">System 3 — Fine-Tuned Model</div>
-                        <div class="card-subtitle">TinyLlama 1.1B · LoRA on programming Q&A</div>
+                        <div class="card-subtitle">Qwen2.5-1.5B · LoRA on programming Q&A</div>
                     </div>
                 </div>
                 <div class="card-body">
                     <div class="card-answer">{r3['answer']}</div>
                     <div class="card-meta">
                         <span class="time-chip">⏱ {r3['response_time']}s</span>
+                        {metric_chips(m.get('r3', {}))}
                     </div>
                 </div>
             </div>
@@ -624,11 +687,11 @@ if st.session_state.last_results and not st.session_state.rating_submitted:
         st.success(f"Rating saved! Total questions rated: {len(st.session_state.ratings)}")
         st.rerun()
 
-# ── Metrics table ──────────────────────────────────────────────────────────────
+# ── Analytics tab ─────────────────────────────────────────────────────────────
 st.divider()
 st.markdown("""
 <div class="section-header">
-    <span class="section-header-text">Evaluation metrics</span>
+    <span class="section-header-text">📊 Analytics &amp; Evaluation</span>
     <div class="section-header-line"></div>
 </div>
 """, unsafe_allow_html=True)
@@ -667,6 +730,57 @@ else:
     row_halluc   = (badge(f"{v_h1}%",  color_halluc(v_h1)),   badge(f"{v_h2}%",  color_halluc(v_h2)),   badge(f"{v_h3}%",  color_halluc(v_h3)))
     row_complete = (badge(f"{v_p1}/5", color_complete(v_p1)), badge(f"{v_p2}/5", color_complete(v_p2)), badge(f"{v_p3}/5", color_complete(v_p3)))
     row_time     = (badge(f"{v_t1}s",  color_time(v_t1)),     badge(f"{v_t2}s",  color_time(v_t2)),     badge(f"{v_t3}s",  color_time(v_t3)))
+
+    # ── Plotly charts ──────────────────────────────────────────────────────────
+    _systems = ["Baseline LLM", "RAG Chatbot", "Fine-Tuned"]
+    _colors  = ["#3b82f6", "#10b981", "#8b5cf6"]
+    _layout  = dict(
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#94a3b8", size=12),
+        legend=dict(bgcolor="rgba(0,0,0,0)", bordercolor="#1e293b", borderwidth=1),
+        xaxis=dict(gridcolor="#1a2540", linecolor="#1a2540"),
+        yaxis=dict(gridcolor="#1a2540", linecolor="#1a2540"),
+        margin=dict(l=20, r=20, t=48, b=20),
+    )
+
+    ch1, ch2 = st.columns(2)
+
+    with ch1:
+        fig1 = go.Figure()
+        fig1.add_trace(go.Bar(
+            name="Correctness",  x=_systems, y=[v_c1, v_c2, v_c3],
+            marker_color=_colors, opacity=1.0,
+            text=[f"{v}/5" for v in [v_c1, v_c2, v_c3]], textposition="auto",
+        ))
+        fig1.add_trace(go.Bar(
+            name="Completeness", x=_systems, y=[v_p1, v_p2, v_p3],
+            marker_color=_colors, opacity=0.55,
+            text=[f"{v}/5" for v in [v_p1, v_p2, v_p3]], textposition="auto",
+        ))
+        fig1.update_layout(
+            **_layout, barmode="group", height=300,
+            title=dict(text="Quality Scores (out of 5)", font=dict(color="#e2e8f0", size=14)),
+            yaxis=dict(range=[0, 5], gridcolor="#1a2540", linecolor="#1a2540"),
+        )
+        st.plotly_chart(fig1, use_container_width=True)
+
+    with ch2:
+        fig2 = go.Figure()
+        fig2.add_trace(go.Bar(
+            name="Response Time", x=_systems, y=[v_t1, v_t2, v_t3],
+            marker_color=_colors,
+            text=[f"{v}s" for v in [v_t1, v_t2, v_t3]], textposition="auto",
+        ))
+        fig2.add_trace(go.Bar(
+            name="Hallucination %", x=_systems, y=[v_h1, v_h2, v_h3],
+            marker_color=_colors, opacity=0.55,
+            text=[f"{v}%" for v in [v_h1, v_h2, v_h3]], textposition="auto",
+        ))
+        fig2.update_layout(
+            **_layout, barmode="group", height=300,
+            title=dict(text="Response Time (s) &amp; Hallucination (%)", font=dict(color="#e2e8f0", size=14)),
+        )
+        st.plotly_chart(fig2, use_container_width=True)
 
 if n == 0:
     dash = '<span class="badge badge-grey">—</span>'
@@ -722,5 +836,7 @@ with st.expander("About CodeSage"):
 |--------|-------------|
 | Baseline | Llama 3.1 8B via Groq · system prompt only |
 | RAG | FAISS vector store + HuggingFace embeddings + Llama 3.1 8B via Groq |
-| Fine-tuned | TinyLlama 1.1B fine-tuned via LoRA on 20 programming Q&A pairs |
+| Fine-tuned | Qwen2.5-1.5B-Instruct fine-tuned via LoRA on 20 programming Q&A pairs |
+
+Drop any PDF into `data/pdfs/` and delete `data/faiss_index/` to rebuild the RAG knowledge base with it included.
 """)

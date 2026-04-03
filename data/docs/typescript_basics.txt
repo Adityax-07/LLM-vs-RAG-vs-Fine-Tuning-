@@ -1,0 +1,72 @@
+TypeScript Basics
+
+TypeScript is a statically typed superset of JavaScript that compiles to plain JavaScript. It adds optional type annotations, interfaces, and generics.
+
+Basic Types:
+  let name: string = "Alice";
+  let age: number = 30;
+  let active: boolean = true;
+  let items: string[] = ["a", "b"];          // array of strings
+  let tuple: [string, number] = ["x", 1];   // fixed-length typed array
+  let value: any = "anything";              // opt out of type checking
+  let unknown: unknown = 5;                 // safer than any — must check type before use
+  let nothing: void = undefined;            // for functions that return nothing
+  let n: null = null;
+  let u: undefined = undefined;
+
+Union and Intersection Types:
+  let id: string | number;          // can be string OR number
+  type AB = TypeA & TypeB;          // must satisfy both types
+
+Type Aliases:
+  type Point = { x: number; y: number };
+  type ID = string | number;
+
+Interfaces:
+  interface User {
+    id: number;
+    name: string;
+    email?: string;   // optional property
+    readonly createdAt: Date;   // cannot be reassigned
+  }
+- Interfaces can be extended: interface Admin extends User { role: string }
+- Classes can implement interfaces: class MyUser implements User { ... }
+
+Functions:
+  function add(a: number, b: number): number { return a + b; }
+  const greet = (name: string): string => `Hello, ${name}`;
+  function log(msg: string, level?: string): void { ... }  // optional param
+
+Generics:
+  function identity<T>(arg: T): T { return arg; }
+  const result = identity<string>("hello");
+
+  interface ApiResponse<T> { data: T; status: number; }
+  // Can use any type: ApiResponse<User>, ApiResponse<string[]>
+
+Enums:
+  enum Direction { Up = "UP", Down = "DOWN", Left = "LEFT", Right = "RIGHT" }
+  let dir: Direction = Direction.Up;
+
+Type Assertions:
+  const input = document.getElementById("name") as HTMLInputElement;
+  input.value = "Alice";
+
+keyof and typeof:
+  type Keys = keyof User;          // "id" | "name" | "email" | "createdAt"
+  type MyType = typeof someObject; // infer type from value
+
+Utility Types:
+  Partial<T>     — all properties optional
+  Required<T>    — all properties required
+  Readonly<T>    — all properties readonly
+  Pick<T, K>     — only keep listed keys
+  Omit<T, K>     — remove listed keys
+  Record<K, V>   — object with keys K and values V
+  ReturnType<T>  — return type of a function type
+
+tsconfig.json key options:
+  "strict": true      — enables all strict type checks
+  "target": "ES2020"  — compile output JS version
+  "module": "CommonJS" or "ESNext"
+  "outDir": "./dist"  — output folder
