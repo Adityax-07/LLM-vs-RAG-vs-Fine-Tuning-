@@ -1,4 +1,5 @@
 import os
+import html as html_lib
 import json
 import numpy as np
 import streamlit as st
@@ -19,7 +20,10 @@ if "last_results"     not in st.session_state: st.session_state.last_results    
 if "rating_submitted" not in st.session_state: st.session_state.rating_submitted = False
 if "input_question"   not in st.session_state: st.session_state.input_question   = ""
 if "auto_run"         not in st.session_state: st.session_state.auto_run         = False
-if "auto_metrics"     not in st.session_state: st.session_state.auto_metrics     = {}
+if "auto_metrics"      not in st.session_state: st.session_state.auto_metrics      = {}
+if "benchmark_results" not in st.session_state: st.session_state.benchmark_results = []
+if "winner"            not in st.session_state: st.session_state.winner            = None
+if "halluc_flags"      not in st.session_state: st.session_state.halluc_flags      = {}
 
 # ── CSS ───────────────────────────────────────────────────────────────────────
 st.markdown("""<style>
@@ -202,10 +206,7 @@ div[data-testid="stTextInput"] label {
     margin-top: 14px; padding-top: 12px;
     border-top: 1px solid rgba(255,255,255,.05);
 }
-.time-chip {
-    font-size: 11px; font-weight: 600;
-    padding: 3px 10px; border-radius: 99px;
-}
+.time-chip { display: none; }
 
 /* Blue */
 .card-blue { background: linear-gradient(160deg,#091b38,#0c2045); border: 1px solid rgba(59,130,246,.2); }
@@ -285,11 +286,14 @@ div[data-testid="stTextInput"] label {
 .badge-grey   { background: rgba(100,116,139,.1); color: #64748b; border: 1px solid rgba(100,116,139,.25); }
 .metric-note  { color: #334155; font-size: 11px; font-weight: 400; }
 
-/* ── Auto-metric chips ───────────────────────────────────────── */
-.rouge-chip { font-size:11px; font-weight:600; padding:3px 9px; border-radius:99px;
-    background:rgba(251,191,36,.08); color:#fbbf24; border:1px solid rgba(251,191,36,.2); }
-.sim-chip   { font-size:11px; font-weight:600; padding:3px 9px; border-radius:99px;
-    background:rgba(244,114,182,.08); color:#f472b6; border:1px solid rgba(244,114,182,.2); }
+/* ── Metric chips ────────────────────────────────────────────── */
+.chip { font-size:11px; font-weight:600; padding:3px 9px; border-radius:99px; white-space:nowrap; }
+.chip-time   { background:rgba(96,165,250,.08);  color:#60a5fa; border:1px solid rgba(96,165,250,.2); }
+.chip-acc    { background:rgba(52,211,153,.08);  color:#34d399; border:1px solid rgba(52,211,153,.2); }
+.chip-ground { background:rgba(251,191,36,.08);  color:#fbbf24; border:1px solid rgba(251,191,36,.2); }
+.chip-ctx    { background:rgba(244,114,182,.08); color:#f472b6; border:1px solid rgba(244,114,182,.2); }
+.chip-rouge  { background:rgba(167,139,250,.08); color:#a78bfa; border:1px solid rgba(167,139,250,.2); }
+.card-meta { flex-wrap: wrap; gap: 6px !important; }
 
 /* ── Tabs ────────────────────────────────────────────────────── */
 div[data-testid="stTabs"] button[data-baseweb="tab"] {
@@ -298,6 +302,46 @@ div[data-testid="stTabs"] button[data-baseweb="tab"] {
 div[data-testid="stTabs"] button[data-baseweb="tab"][aria-selected="true"] {
     color: #e2e8f0;
 }
+
+/* ── Winner & hallucination badges ──────────────────────────── */
+.winner-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(251,191,36,.12); color: #fbbf24;
+    border: 1px solid rgba(251,191,36,.3); border-radius: 99px;
+    font-size: 11px; font-weight: 700; padding: 3px 10px;
+    letter-spacing: .3px;
+}
+.halluc-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(239,68,68,.1); color: #f87171;
+    border: 1px solid rgba(239,68,68,.25); border-radius: 99px;
+    font-size: 11px; font-weight: 700; padding: 3px 10px;
+}
+.card-header-row {
+    display: flex; align-items: center;
+    justify-content: space-between; width: 100%;
+}
+
+/* ── KPI stat cards ──────────────────────────────────────────── */
+.kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 18px 0; }
+.kpi-card {
+    border-radius: 14px; padding: 18px 20px;
+    display: flex; flex-direction: column; gap: 6px;
+}
+.kpi-card-blue   { background: linear-gradient(135deg,#091b38,#0c2045); border: 1px solid rgba(59,130,246,.25); }
+.kpi-card-teal   { background: linear-gradient(135deg,#041a0f,#052516); border: 1px solid rgba(16,185,129,.25); }
+.kpi-card-purple { background: linear-gradient(135deg,#100825,#16092e); border: 1px solid rgba(139,92,246,.25); }
+.kpi-system { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; opacity: .6; }
+.kpi-system-blue   { color: #60a5fa; }
+.kpi-system-teal   { color: #34d399; }
+.kpi-system-purple { color: #a78bfa; }
+.kpi-stats { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 4px; }
+.kpi-stat { display: flex; flex-direction: column; }
+.kpi-val { font-size: 26px; font-weight: 900; line-height: 1.1; letter-spacing: -1px; }
+.kpi-val-blue   { color: #60a5fa; }
+.kpi-val-teal   { color: #34d399; }
+.kpi-val-purple { color: #a78bfa; }
+.kpi-label { font-size: 10px; color: #475569; font-weight: 600; letter-spacing: .5px; margin-top: 2px; }
 
 /* ── Scrollbar ───────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -349,29 +393,120 @@ def load_reference_answers():
 
 ref_answers = load_reference_answers()
 
-def compute_auto_metrics(answer: str, question: str) -> dict:
-    ref = ref_answers.get(question.strip().lower())
-    if not ref or not answer:
+def safe_answer(text: str) -> str:
+    """Escape HTML and convert newlines to <br> so blank lines don't break the markdown HTML block."""
+    return html_lib.escape(text).replace('\n', '<br>')
+
+def _cosine(a, b):
+    n = np.linalg.norm(a) * np.linalg.norm(b)
+    return float(np.dot(a, b) / (n + 1e-8))
+
+def compute_auto_metrics(answer: str, question: str, context: str = "") -> dict:
+    if not answer:
         return {}
     try:
-        from rouge_score import rouge_scorer as rs
-        scorer = rs.RougeScorer(["rougeL"], use_stemmer=True)
-        rouge_l = round(scorer.score(ref, answer)["rougeL"].fmeasure, 3)
-        r_emb = np.array(vs.embeddings.embed_query(ref))
         a_emb = np.array(vs.embeddings.embed_query(answer))
-        norm = np.linalg.norm(r_emb) * np.linalg.norm(a_emb)
-        sem_sim = round(float(np.dot(r_emb, a_emb) / (norm + 1e-8)), 3)
-        return {"rouge_l": rouge_l, "sem_sim": max(0.0, sem_sim)}
+        q_emb = np.array(vs.embeddings.embed_query(question))
+
+        # accuracy vs reference answer
+        ref = ref_answers.get(question.strip().lower())
+        accuracy = None
+        rouge_l  = None
+        if ref:
+            from rouge_score import rouge_scorer as rs
+            scorer  = rs.RougeScorer(["rougeL"], use_stemmer=True)
+            rouge_l = round(scorer.score(ref, answer)["rougeL"].fmeasure, 3)
+            r_emb   = np.array(vs.embeddings.embed_query(ref))
+            accuracy = round(max(0.0, _cosine(a_emb, r_emb)), 3)
+
+        # groundedness — how much answer resembles retrieved context
+        groundedness = None
+        if context and context.strip():
+            c_emb = np.array(vs.embeddings.embed_query(context[:1000]))
+            groundedness = round(max(0.0, _cosine(a_emb, c_emb)), 3)
+
+        # context relevance — how relevant retrieved context is to question
+        ctx_relevance = None
+        if context and context.strip():
+            c_emb2 = np.array(vs.embeddings.embed_query(context[:1000]))
+            ctx_relevance = round(max(0.0, _cosine(q_emb, c_emb2)), 3)
+
+        result = {}
+        if accuracy    is not None: result["accuracy"]     = accuracy
+        if rouge_l     is not None: result["rouge_l"]      = rouge_l
+        if groundedness   is not None: result["groundedness"]  = groundedness
+        if ctx_relevance  is not None: result["ctx_relevance"] = ctx_relevance
+        return result
     except Exception:
         return {}
 
-def metric_chips(m: dict) -> str:
-    if not m:
+def metric_chips(m: dict, time_s: float = None) -> str:
+    if not m and time_s is None:
         return ""
-    return (
-        f'<span class="rouge-chip">ROUGE-L {m["rouge_l"]:.3f}</span>'
-        f'<span class="sim-chip">Sem.Sim {m["sem_sim"]:.3f}</span>'
-    )
+    parts = []
+    if time_s is not None:
+        parts.append(f'<span class="chip chip-time">⏱ {time_s}s</span>')
+    if m.get("accuracy") is not None:
+        pct = round(m["accuracy"] * 100, 1)
+        parts.append(f'<span class="chip chip-acc">🎯 Accuracy {pct}%</span>')
+    if m.get("groundedness") is not None:
+        parts.append(f'<span class="chip chip-ground">⚓ Grounded {m["groundedness"]:.2f}</span>')
+    if m.get("ctx_relevance") is not None:
+        parts.append(f'<span class="chip chip-ctx">📄 Ctx.Rel {m["ctx_relevance"]:.2f}</span>')
+    if m.get("rouge_l") is not None:
+        parts.append(f'<span class="chip chip-rouge">ROUGE-L {m["rouge_l"]:.3f}</span>')
+    return "".join(parts)
+
+# ── Benchmark runner ──────────────────────────────────────────────────────────
+BENCHMARK_QUESTIONS = [
+    "What is binary search?",
+    "Stack vs Queue?",
+    "Explain merge sort.",
+    "What are React hooks?",
+    "What is a REST API?",
+    "What is dynamic programming?",
+]
+
+def run_benchmark(progress_bar=None):
+    results = []
+    has_ft = os.path.exists("./finetuned_model")
+    if has_ft:
+        from system3_inference import ask_finetuned
+    total = len(BENCHMARK_QUESTIONS)
+    for i, q in enumerate(BENCHMARK_QUESTIONS):
+        if progress_bar:
+            progress_bar.progress((i + 0.5) / total, text=f"({i+1}/{total}) {q[:50]}...")
+        r1 = ask_baseline(q)
+        r2 = ask_rag(q, vs)
+        r3 = ask_finetuned(q) if has_ft else {"answer": "", "response_time": 0}
+        m1 = compute_auto_metrics(r1["answer"], q)
+        m2 = compute_auto_metrics(r2["answer"], q)
+        m3 = compute_auto_metrics(r3["answer"], q)
+        results.append({
+            "question": q,
+            "r1_time": r1["response_time"], "r2_time": r2["response_time"], "r3_time": r3["response_time"],
+            "r1_rouge": m1.get("rouge_l", 0), "r2_rouge": m2.get("rouge_l", 0), "r3_rouge": m3.get("rouge_l", 0),
+            "r1_sim":   m1.get("accuracy", 0), "r2_sim":   m2.get("accuracy", 0), "r3_sim":   m3.get("accuracy", 0),
+        })
+    return results
+
+def benchmark_kpis(results):
+    n = len(results)
+    if n == 0:
+        return {}
+    def mean(key): return round(sum(r[key] for r in results) / n, 3)
+    return {
+        "r1_acc":   round(mean("r1_sim") * 100, 1),
+        "r2_acc":   round(mean("r2_sim") * 100, 1),
+        "r3_acc":   round(mean("r3_sim") * 100, 1),
+        "r1_rouge": mean("r1_rouge"),
+        "r2_rouge": mean("r2_rouge"),
+        "r3_rouge": mean("r3_rouge"),
+        "r1_time":  mean("r1_time"),
+        "r2_time":  mean("r2_time"),
+        "r3_time":  mean("r3_time"),
+        "n": n,
+    }
 
 # ── 3D Particle background ────────────────────────────────────────────────────
 components.html("""
@@ -511,7 +646,6 @@ run_clicked = st.button("⚡  Ask All 3 Systems", type="primary")
 # ── Run systems ───────────────────────────────────────────────────────────────
 if (run_clicked or st.session_state.auto_run) and question:
     st.session_state.auto_run = False
-    st.session_state.rating_submitted = False
 
     col1, col2, col3 = st.columns(3)
 
@@ -535,9 +669,12 @@ if (run_clicked or st.session_state.auto_run) and question:
     }
     st.session_state.auto_metrics = {
         "r1": compute_auto_metrics(r1["answer"], question),
-        "r2": compute_auto_metrics(r2["answer"], question),
+        "r2": compute_auto_metrics(r2["answer"], question, context=r2.get("context_used", "")),
         "r3": compute_auto_metrics(r3["answer"], question),
     }
+    _accs = {k: st.session_state.auto_metrics[k].get("accuracy", 0) for k in ("r1","r2","r3")}
+    st.session_state.winner = max(_accs, key=_accs.get) if any(_accs.values()) else None
+    st.session_state.halluc_flags = {k: (0 < v < 0.4) for k, v in _accs.items()}
 
 # ── Render answers ────────────────────────────────────────────────────────────
 if st.session_state.last_results:
@@ -553,23 +690,36 @@ if st.session_state.last_results:
 
     col1, col2, col3 = st.columns(3)
 
-    m = st.session_state.auto_metrics
+    m   = st.session_state.auto_metrics
+    _w  = st.session_state.winner
+    _hf = st.session_state.halluc_flags
+
+    def _header_badge(key):
+        if _w == key:
+            return '<span class="winner-badge">🏆 Best Answer</span>'
+        if _hf.get(key):
+            return '<span class="halluc-badge">⚠️ Low Confidence</span>'
+        return "<span></span>"
 
     with col1:
         st.markdown(f"""
         <div class="card card-blue">
             <div class="card-header">
-                <span class="card-icon">⚡</span>
-                <div>
-                    <div class="card-title">System 1 — Baseline LLM</div>
-                    <div class="card-subtitle">Prompt only · No extra knowledge</div>
+                <div class="card-header-row">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span class="card-icon">⚡</span>
+                        <div>
+                            <div class="card-title">System 1 — Baseline LLM</div>
+                            <div class="card-subtitle">Prompt only · No extra knowledge</div>
+                        </div>
+                    </div>
+                    {_header_badge('r1')}
                 </div>
             </div>
             <div class="card-body">
-                <div class="card-answer">{r1['answer']}</div>
+                <div class="card-answer">{safe_answer(r1['answer'])}</div>
                 <div class="card-meta">
-                    <span class="time-chip">⏱ {r1['response_time']}s</span>
-                    {metric_chips(m.get('r1', {}))}
+                    {metric_chips(m.get('r1', {}), time_s=r1['response_time'])}
                 </div>
             </div>
         </div>
@@ -579,21 +729,25 @@ if st.session_state.last_results:
         st.markdown(f"""
         <div class="card card-teal">
             <div class="card-header">
-                <span class="card-icon">🔍</span>
-                <div>
-                    <div class="card-title">System 2 — RAG Chatbot</div>
-                    <div class="card-subtitle">Retrieves from knowledge base · Then generates</div>
+                <div class="card-header-row">
+                    <div style="display:flex;align-items:center;gap:10px">
+                        <span class="card-icon">🔍</span>
+                        <div>
+                            <div class="card-title">System 2 — RAG Chatbot</div>
+                            <div class="card-subtitle">Retrieves from knowledge base · Then generates</div>
+                        </div>
+                    </div>
+                    {_header_badge('r2')}
                 </div>
             </div>
             <div class="card-body">
-                <div class="card-answer">{r2['answer']}</div>
+                <div class="card-answer">{safe_answer(r2['answer'])}</div>
                 <div class="rag-ctx">
                     <div class="rag-ctx-label">📄 Retrieved context</div>
-                    {r2['context_used']}
+                    {html_lib.escape(r2['context_used'])}
                 </div>
                 <div class="card-meta">
-                    <span class="time-chip">⏱ {r2['response_time']}s</span>
-                    {metric_chips(m.get('r2', {}))}
+                    {metric_chips(m.get('r2', {}), time_s=r2['response_time'])}
                 </div>
             </div>
         </div>
@@ -604,10 +758,14 @@ if st.session_state.last_results:
             st.markdown("""
             <div class="card card-purple">
                 <div class="card-header">
-                    <span class="card-icon">🧠</span>
-                    <div>
-                        <div class="card-title">System 3 — Fine-Tuned Model</div>
-                        <div class="card-subtitle">Qwen2.5-1.5B · LoRA fine-tuning</div>
+                    <div class="card-header-row">
+                        <div style="display:flex;align-items:center;gap:10px">
+                            <span class="card-icon">🧠</span>
+                            <div>
+                                <div class="card-title">System 3 — Fine-Tuned Model</div>
+                                <div class="card-subtitle">Qwen2.5-1.5B · LoRA fine-tuning</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="card-body">
@@ -623,69 +781,25 @@ if st.session_state.last_results:
             st.markdown(f"""
             <div class="card card-purple">
                 <div class="card-header">
-                    <span class="card-icon">🧠</span>
-                    <div>
-                        <div class="card-title">System 3 — Fine-Tuned Model</div>
-                        <div class="card-subtitle">Qwen2.5-1.5B · LoRA on programming Q&A</div>
+                    <div class="card-header-row">
+                        <div style="display:flex;align-items:center;gap:10px">
+                            <span class="card-icon">🧠</span>
+                            <div>
+                                <div class="card-title">System 3 — Fine-Tuned Model</div>
+                                <div class="card-subtitle">Qwen2.5-1.5B · LoRA on programming Q&A</div>
+                            </div>
+                        </div>
+                        {_header_badge('r3')}
                     </div>
                 </div>
                 <div class="card-body">
-                    <div class="card-answer">{r3['answer']}</div>
+                    <div class="card-answer">{safe_answer(r3['answer'])}</div>
                     <div class="card-meta">
-                        <span class="time-chip">⏱ {r3['response_time']}s</span>
-                        {metric_chips(m.get('r3', {}))}
+                        {metric_chips(m.get('r3', {}), time_s=r3['response_time'])}
                     </div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
-
-# ── Rating section ─────────────────────────────────────────────────────────────
-if st.session_state.last_results and not st.session_state.rating_submitted:
-    st.divider()
-    st.markdown("""
-    <div class="section-header">
-        <span class="section-header-text">Rate the answers</span>
-        <div class="section-header-line"></div>
-    </div>
-    """, unsafe_allow_html=True)
-    st.caption("Your ratings populate the live evaluation table below.")
-
-    rc1, rc2, rc3 = st.columns(3)
-
-    with rc1:
-        st.markdown('<div class="rate-header rate-blue">System 1 — Baseline LLM</div>', unsafe_allow_html=True)
-        c1_correct  = st.slider("Correctness (1–5)",  1, 5, 3, key="c1_correct")
-        c1_halluc   = st.checkbox("Hallucination detected?", key="c1_halluc")
-        c1_complete = st.slider("Completeness (1–5)", 1, 5, 3, key="c1_complete")
-
-    with rc2:
-        st.markdown('<div class="rate-header rate-teal">System 2 — RAG Chatbot</div>', unsafe_allow_html=True)
-        c2_correct  = st.slider("Correctness (1–5)",  1, 5, 3, key="c2_correct")
-        c2_halluc   = st.checkbox("Hallucination detected?", key="c2_halluc")
-        c2_complete = st.slider("Completeness (1–5)", 1, 5, 3, key="c2_complete")
-
-    with rc3:
-        st.markdown('<div class="rate-header rate-purple">System 3 — Fine-Tuned</div>', unsafe_allow_html=True)
-        c3_correct  = st.slider("Correctness (1–5)",  1, 5, 3, key="c3_correct")
-        c3_halluc   = st.checkbox("Hallucination detected?", key="c3_halluc")
-        c3_complete = st.slider("Completeness (1–5)", 1, 5, 3, key="c3_complete")
-
-    if st.button("Submit Ratings", type="primary"):
-        res = st.session_state.last_results
-        st.session_state.ratings.append({
-            "question":    res["question"],
-            "c1_correct":  c1_correct,  "c2_correct":  c2_correct,  "c3_correct":  c3_correct,
-            "c1_halluc":   1 if c1_halluc  else 0,
-            "c2_halluc":   1 if c2_halluc  else 0,
-            "c3_halluc":   1 if c3_halluc  else 0,
-            "c1_complete": c1_complete, "c2_complete": c2_complete, "c3_complete": c3_complete,
-            "c1_time":     res["r1"]["response_time"],
-            "c2_time":     res["r2"]["response_time"],
-            "c3_time":     res["r3"]["response_time"],
-        })
-        st.session_state.rating_submitted = True
-        st.success(f"Rating saved! Total questions rated: {len(st.session_state.ratings)}")
-        st.rerun()
 
 # ── Analytics tab ─────────────────────────────────────────────────────────────
 st.divider()
@@ -696,42 +810,23 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-ratings = st.session_state.ratings
-n = len(ratings)
+# ── Benchmark button + KPI cards ──────────────────────────────────────────────
+_bm_col, _ = st.columns([2, 5])
+with _bm_col:
+    if st.button("🔬 Run Auto-Benchmark", key="run_bm", help="Runs all 6 questions through all 3 systems and computes metrics automatically"):
+        _prog = st.progress(0, text="Starting benchmark...")
+        st.session_state.benchmark_results = run_benchmark(progress_bar=_prog)
+        _prog.progress(1.0, text="Done!")
+        st.rerun()
 
-if n == 0:
-    st.caption("No ratings yet. Ask a question and rate the answers to populate this table.")
-    def badge(val, _n):
-        return '<span class="badge badge-grey">—</span>'
-else:
-    st.caption(f"Based on **{n} question(s)** rated by you. Response time is measured automatically.")
+_dash = '<span class="badge badge-grey">—</span>'
+_bm   = st.session_state.benchmark_results
 
-    def avg(key): return round(sum(r[key] for r in ratings) / n, 2)
-    def pct(key): return round(sum(r[key] for r in ratings) / n * 100)
+def badge(val, cls):
+    return f'<span class="badge {cls}">{val}</span>'
 
-    def color_correct(v):
-        return "badge-green" if v >= 4.0 else ("badge-yellow" if v >= 3.0 else "badge-red")
-    def color_halluc(v):
-        return "badge-green" if v <= 15  else ("badge-yellow" if v <= 30  else "badge-red")
-    def color_complete(v):
-        return "badge-green" if v >= 4.0 else ("badge-yellow" if v >= 3.0 else "badge-red")
-    def color_time(v):
-        return "badge-green" if v <= 1.0 else ("badge-yellow" if v <= 2.0 else "badge-red")
-
-    def badge(val, cls):
-        return f'<span class="badge {cls}">{val}</span>'
-
-    v_c1,v_c2,v_c3 = avg("c1_correct"), avg("c2_correct"), avg("c3_correct")
-    v_h1,v_h2,v_h3 = pct("c1_halluc"),  pct("c2_halluc"),  pct("c3_halluc")
-    v_p1,v_p2,v_p3 = avg("c1_complete"),avg("c2_complete"),avg("c3_complete")
-    v_t1,v_t2,v_t3 = avg("c1_time"),    avg("c2_time"),    avg("c3_time")
-
-    row_correct  = (badge(f"{v_c1}/5", color_correct(v_c1)),  badge(f"{v_c2}/5", color_correct(v_c2)),  badge(f"{v_c3}/5", color_correct(v_c3)))
-    row_halluc   = (badge(f"{v_h1}%",  color_halluc(v_h1)),   badge(f"{v_h2}%",  color_halluc(v_h2)),   badge(f"{v_h3}%",  color_halluc(v_h3)))
-    row_complete = (badge(f"{v_p1}/5", color_complete(v_p1)), badge(f"{v_p2}/5", color_complete(v_p2)), badge(f"{v_p3}/5", color_complete(v_p3)))
-    row_time     = (badge(f"{v_t1}s",  color_time(v_t1)),     badge(f"{v_t2}s",  color_time(v_t2)),     badge(f"{v_t3}s",  color_time(v_t3)))
-
-    # ── Plotly charts ──────────────────────────────────────────────────────────
+if _bm:
+    _kpi = benchmark_kpis(_bm)
     _systems = ["Baseline LLM", "RAG Chatbot", "Fine-Tuned"]
     _colors  = ["#3b82f6", "#10b981", "#8b5cf6"]
     _layout  = dict(
@@ -743,48 +838,95 @@ else:
         margin=dict(l=20, r=20, t=48, b=20),
     )
 
-    ch1, ch2 = st.columns(2)
+    # Win count per system
+    _wins = {"r1": 0, "r2": 0, "r3": 0}
+    _halluc_counts = {"r1": 0, "r2": 0, "r3": 0}
+    for _row in _bm:
+        _row_accs = {k: _row[f"{k}_sim"] for k in ("r1","r2","r3")}
+        _best = max(_row_accs, key=_row_accs.get)
+        if _row_accs[_best] > 0:
+            _wins[_best] += 1
+        for k in ("r1","r2","r3"):
+            if 0 < _row_accs[k] < 0.4:
+                _halluc_counts[k] += 1
 
+    _n_q = len(_bm)
+
+    # KPI cards
+    st.markdown(f"""
+    <div class="kpi-grid">
+      <div class="kpi-card kpi-card-blue">
+        <div class="kpi-system kpi-system-blue">⚡ Baseline LLM</div>
+        <div class="kpi-stats">
+          <div class="kpi-stat"><span class="kpi-val kpi-val-blue">{_kpi['r1_acc']}%</span><span class="kpi-label">Accuracy</span></div>
+          <div class="kpi-stat"><span class="kpi-val kpi-val-blue">{_kpi['r1_rouge']}</span><span class="kpi-label">ROUGE-L</span></div>
+          <div class="kpi-stat"><span class="kpi-val kpi-val-blue">{_kpi['r1_time']}s</span><span class="kpi-label">Avg Latency</span></div>
+          <div class="kpi-stat"><span class="kpi-val kpi-val-blue">{_wins['r1']}/{_n_q}</span><span class="kpi-label">Wins</span></div>
+        </div>
+      </div>
+      <div class="kpi-card kpi-card-teal">
+        <div class="kpi-system kpi-system-teal">🔍 RAG Chatbot</div>
+        <div class="kpi-stats">
+          <div class="kpi-stat"><span class="kpi-val kpi-val-teal">{_kpi['r2_acc']}%</span><span class="kpi-label">Accuracy</span></div>
+          <div class="kpi-stat"><span class="kpi-val kpi-val-teal">{_kpi['r2_rouge']}</span><span class="kpi-label">ROUGE-L</span></div>
+          <div class="kpi-stat"><span class="kpi-val kpi-val-teal">{_kpi['r2_time']}s</span><span class="kpi-label">Avg Latency</span></div>
+          <div class="kpi-stat"><span class="kpi-val kpi-val-teal">{_wins['r2']}/{_n_q}</span><span class="kpi-label">Wins</span></div>
+        </div>
+      </div>
+      <div class="kpi-card kpi-card-purple">
+        <div class="kpi-system kpi-system-purple">🧠 Fine-Tuned</div>
+        <div class="kpi-stats">
+          <div class="kpi-stat"><span class="kpi-val kpi-val-purple">{_kpi['r3_acc']}%</span><span class="kpi-label">Accuracy</span></div>
+          <div class="kpi-stat"><span class="kpi-val kpi-val-purple">{_kpi['r3_rouge']}</span><span class="kpi-label">ROUGE-L</span></div>
+          <div class="kpi-stat"><span class="kpi-val kpi-val-purple">{_kpi['r3_time']}s</span><span class="kpi-label">Avg Latency</span></div>
+          <div class="kpi-stat"><span class="kpi-val kpi-val-purple">{_wins['r3']}/{_n_q}</span><span class="kpi-label">Wins</span></div>
+        </div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+    st.caption(f"Benchmark across {_n_q} questions · semantic similarity via embeddings · ROUGE-L vs reference answers")
+
+    # Charts
+    ch1, ch2 = st.columns(2)
     with ch1:
         fig1 = go.Figure()
-        fig1.add_trace(go.Bar(
-            name="Correctness",  x=_systems, y=[v_c1, v_c2, v_c3],
-            marker_color=_colors, opacity=1.0,
-            text=[f"{v}/5" for v in [v_c1, v_c2, v_c3]], textposition="auto",
-        ))
-        fig1.add_trace(go.Bar(
-            name="Completeness", x=_systems, y=[v_p1, v_p2, v_p3],
+        fig1.add_trace(go.Bar(name="Accuracy %", x=_systems,
+            y=[_kpi['r1_acc'], _kpi['r2_acc'], _kpi['r3_acc']],
+            marker_color=_colors, text=[f"{v}%" for v in [_kpi['r1_acc'],_kpi['r2_acc'],_kpi['r3_acc']]], textposition="auto"))
+        fig1.add_trace(go.Bar(name="ROUGE-L ×100", x=_systems,
+            y=[round(_kpi['r1_rouge']*100,1), round(_kpi['r2_rouge']*100,1), round(_kpi['r3_rouge']*100,1)],
             marker_color=_colors, opacity=0.55,
-            text=[f"{v}/5" for v in [v_p1, v_p2, v_p3]], textposition="auto",
-        ))
-        fig1.update_layout(
-            **_layout, barmode="group", height=300,
-            title=dict(text="Quality Scores (out of 5)", font=dict(color="#e2e8f0", size=14)),
-            yaxis=dict(range=[0, 5], gridcolor="#1a2540", linecolor="#1a2540"),
-        )
+            text=[f"{round(v*100,1)}" for v in [_kpi['r1_rouge'],_kpi['r2_rouge'],_kpi['r3_rouge']]], textposition="auto"))
+        fig1.update_layout(**_layout, barmode="group", height=300,
+            title=dict(text="Accuracy % vs ROUGE-L (scaled ×100)", font=dict(color="#e2e8f0", size=14)))
         st.plotly_chart(fig1, use_container_width=True)
 
     with ch2:
         fig2 = go.Figure()
-        fig2.add_trace(go.Bar(
-            name="Response Time", x=_systems, y=[v_t1, v_t2, v_t3],
-            marker_color=_colors,
-            text=[f"{v}s" for v in [v_t1, v_t2, v_t3]], textposition="auto",
-        ))
-        fig2.add_trace(go.Bar(
-            name="Hallucination %", x=_systems, y=[v_h1, v_h2, v_h3],
+        fig2.add_trace(go.Bar(name="Avg Latency (s)", x=_systems,
+            y=[_kpi['r1_time'], _kpi['r2_time'], _kpi['r3_time']],
+            marker_color=_colors, text=[f"{v}s" for v in [_kpi['r1_time'],_kpi['r2_time'],_kpi['r3_time']]], textposition="auto"))
+        fig2.add_trace(go.Bar(name="Low Confidence answers", x=_systems,
+            y=[_halluc_counts['r1'], _halluc_counts['r2'], _halluc_counts['r3']],
             marker_color=_colors, opacity=0.55,
-            text=[f"{v}%" for v in [v_h1, v_h2, v_h3]], textposition="auto",
-        ))
-        fig2.update_layout(
-            **_layout, barmode="group", height=300,
-            title=dict(text="Response Time (s) &amp; Hallucination (%)", font=dict(color="#e2e8f0", size=14)),
-        )
+            text=[str(v) for v in [_halluc_counts['r1'],_halluc_counts['r2'],_halluc_counts['r3']]], textposition="auto"))
+        fig2.update_layout(**_layout, barmode="group", height=300,
+            title=dict(text="Avg Latency (s) · Low-Confidence Answers", font=dict(color="#e2e8f0", size=14)))
         st.plotly_chart(fig2, use_container_width=True)
 
-if n == 0:
-    dash = '<span class="badge badge-grey">—</span>'
-    row_correct = row_halluc = row_complete = row_time = (dash, dash, dash)
+    def _col_acc(v): return "badge-green" if v >= 75 else ("badge-yellow" if v >= 55 else "badge-red")
+    def _col_rou(v): return "badge-green" if v >= 0.4 else ("badge-yellow" if v >= 0.2 else "badge-red")
+    def _col_time(v): return "badge-green" if v <= 1.0 else ("badge-yellow" if v <= 2.5 else "badge-red")
+    def _col_halluc(v, n): return "badge-green" if v == 0 else ("badge-yellow" if v <= n//2 else "badge-red")
+
+    bm_row_acc    = tuple(badge(f"{_kpi[f'r{i}_acc']}%",   _col_acc(_kpi[f'r{i}_acc']))   for i in (1,2,3))
+    bm_row_rouge  = tuple(badge(f"{_kpi[f'r{i}_rouge']}",  _col_rou(_kpi[f'r{i}_rouge'])) for i in (1,2,3))
+    bm_row_time   = tuple(badge(f"{_kpi[f'r{i}_time']}s",  _col_time(_kpi[f'r{i}_time'])) for i in (1,2,3))
+    bm_row_wins   = tuple(badge(f"{_wins[f'r{i}']}/{_n_q}", "badge-green" if _wins[f'r{i}']==max(_wins.values()) else "badge-yellow") for i in (1,2,3))
+    bm_row_halluc = tuple(badge(f"{_halluc_counts[f'r{i}']}",_col_halluc(_halluc_counts[f'r{i}'],_n_q)) for i in (1,2,3))
+else:
+    st.caption("Run the benchmark to populate the analytics table.")
+    bm_row_acc = bm_row_rouge = bm_row_time = bm_row_wins = bm_row_halluc = (_dash, _dash, _dash)
 
 st.markdown(f"""
 <div class="eval-wrap">
@@ -799,30 +941,34 @@ st.markdown(f"""
   </thead>
   <tbody>
     <tr>
-      <td>Correctness Score <span class="metric-note">(1–5, user rated)</span></td>
-      <td>{row_correct[0]}</td><td>{row_correct[1]}</td><td>{row_correct[2]}</td>
+      <td>Answer Accuracy <span class="metric-note">(%, semantic similarity vs reference)</span></td>
+      <td>{bm_row_acc[0]}</td><td>{bm_row_acc[1]}</td><td>{bm_row_acc[2]}</td>
     </tr>
     <tr>
-      <td>Hallucination Rate <span class="metric-note">(%, user rated)</span></td>
-      <td>{row_halluc[0]}</td><td>{row_halluc[1]}</td><td>{row_halluc[2]}</td>
+      <td>ROUGE-L Score <span class="metric-note">(lexical overlap vs reference)</span></td>
+      <td>{bm_row_rouge[0]}</td><td>{bm_row_rouge[1]}</td><td>{bm_row_rouge[2]}</td>
     </tr>
     <tr>
-      <td>Answer Completeness <span class="metric-note">(1–5, user rated)</span></td>
-      <td>{row_complete[0]}</td><td>{row_complete[1]}</td><td>{row_complete[2]}</td>
+      <td>Low-Confidence Answers <span class="metric-note">(accuracy &lt; 40%, possible hallucination)</span></td>
+      <td>{bm_row_halluc[0]}</td><td>{bm_row_halluc[1]}</td><td>{bm_row_halluc[2]}</td>
     </tr>
     <tr>
       <td>Avg Response Time <span class="metric-note">(seconds, auto)</span></td>
-      <td>{row_time[0]}</td><td>{row_time[1]}</td><td>{row_time[2]}</td>
+      <td>{bm_row_time[0]}</td><td>{bm_row_time[1]}</td><td>{bm_row_time[2]}</td>
+    </tr>
+    <tr>
+      <td>Questions Won <span class="metric-note">(highest accuracy per question)</span></td>
+      <td>{bm_row_wins[0]}</td><td>{bm_row_wins[1]}</td><td>{bm_row_wins[2]}</td>
     </tr>
   </tbody>
 </table>
 </div>
 """, unsafe_allow_html=True)
 
-if n > 0:
+if _bm:
     st.markdown("<div style='margin-top:12px'></div>", unsafe_allow_html=True)
-    if st.button("Clear All Ratings"):
-        st.session_state.ratings = []
+    if st.button("Clear Benchmark"):
+        st.session_state.benchmark_results = []
         st.rerun()
 
 # ── About ──────────────────────────────────────────────────────────────────────
