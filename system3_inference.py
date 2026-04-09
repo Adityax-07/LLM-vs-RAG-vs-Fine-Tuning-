@@ -14,7 +14,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from peft import PeftModel
 
 BASE_MODEL = "Qwen/Qwen2.5-1.5B-Instruct"
-FINETUNED_PATH = "./finetuned_model"
+FINETUNED_PATH = "./checkpoint-25"
 
 _model = None
 _tokenizer = None

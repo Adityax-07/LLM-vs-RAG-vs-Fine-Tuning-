@@ -61,16 +61,16 @@ Covers CS fundamentals, algorithms, web technologies, databases, and tooling:
 
 | Metric | Baseline LLM | RAG Chatbot | Fine-Tuned | Unit |
 |--------|-------------|-------------|------------|------|
-| Answer Accuracy | 81.5 | 79.9 | — | % |
-| ROUGE-L | 0.216 | 0.291 | — | 0–1 |
-| Groundedness | 0.815 | 0.575 | — | 0–1 |
-| Answer Relevance | 0.720 | 0.768 | — | 0–1 |
-| Faithfulness | 0.216 | 0.172 | — | 0–1 |
-| Hallucination Rate | 0.0 | 6.0 | — | % |
-| Avg Response Time | 1.46 | 4.19 | — | sec |
-| Cost per Query | $0.0020 | $0.0020 | — | USD |
+| Answer Accuracy | 81.5 | 79.9 | **85.3** | % |
+| ROUGE-L | 0.216 | 0.291 | **0.283** | 0–1 |
+| Groundedness | 0.815 | 0.575 | **0.853** | 0–1 |
+| Answer Relevance | 0.720 | 0.768 | **0.758** | 0–1 |
+| Faithfulness | 0.216 | 0.172 | **0.283** | 0–1 |
+| Hallucination Rate | 0.0 | 6.0 | **0.0** | % |
+| Avg Response Time | 1.46 | 4.19 | 169.2 | sec |
+| Cost per Query | $0.0020 | $0.0020 | **$0.0002** | USD |
 
-> Fine-Tuned column shows `—` until `finetuned_model/` is placed in the project root (see Setup §4).  
+> Fine-Tuned runs locally from `checkpoint-25/` (LoRA adapter on Qwen2.5-1.5B-Instruct). High latency is expected on CPU — GPU inference brings it to ~5s.  
 > Full per-question results are in `data/benchmark_cache.json`.
 
 ---
