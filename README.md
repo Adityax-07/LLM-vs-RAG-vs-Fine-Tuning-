@@ -1,180 +1,155 @@
-# 🧙 CodeSage
+# CodeSage — LLM vs RAG vs Fine-Tuning
 
-**A comparative study of three LLM strategies for domain-specific question answering.**
+> A live comparative study of three NLP architectures for domain-specific Q&A, built with Streamlit.
 
-CodeSage puts a Baseline LLM, a RAG pipeline, and a Fine-Tuned model side-by-side so you can ask the same programming question and immediately see how each approach differs in accuracy, grounding, and speed — all scored automatically with no manual input required.
-
----
-
-## Why This Project?
-
-When building an AI assistant for a specific domain (here: programming / DSA / web dev), you have three realistic options:
-
-| Approach | Core idea | Trade-off |
-|---|---|---|
-| **Baseline LLM** | Prompt a large general-purpose model | Fast, zero setup — but may hallucinate or give vague answers |
-| **RAG** | Retrieve relevant docs first, then generate | Grounded answers, updatable knowledge — retrieval adds latency |
-| **Fine-Tuning** | Train a smaller model on domain data | Potentially fastest, very focused — expensive to update |
-
-There is no universal winner. The goal of CodeSage is to **make that trade-off visible** with real side-by-side outputs and fully automatic evaluation metrics.
+Ask a question once — get answers simultaneously from a **Baseline LLM**, a **RAG Chatbot**, and a **Fine-Tuned model**, with automatic quality metrics on every response.
 
 ---
 
 ## What It Does
 
-1. Type (or click) a programming question.
-2. All three systems answer it **simultaneously**.
-3. Each answer card shows auto-computed metric chips: **🎯 Accuracy**, **⚓ Groundedness**, **📄 Context Relevance**, **ROUGE-L**, **⏱ Latency**.
-4. A **🏆 Best Answer** badge highlights the winner per question; a **⚠️ Low Confidence** badge flags possible hallucinations (accuracy < 40%).
-5. Click **Run Auto-Benchmark** to run all 6 sample questions automatically and populate:
-   - KPI cards (Accuracy %, ROUGE-L, Avg Latency, Win count)
-   - Plotly bar charts (Accuracy vs ROUGE-L · Latency vs Low-Confidence count)
-   - A full evaluation table with colour-coded badges
+- **Three systems, one question** — side-by-side answers from all three architectures
+- **Auto-evaluation metrics** per card: Accuracy, ROUGE-L, Groundedness, Context Relevance, Latency
+- **Winner badge** highlights the best answer; **Hallucination badge** flags low-confidence responses
+- **Auto-Benchmark runner** evaluates all 50 reference Q&A pairs and stores results permanently to disk (`data/benchmark_cache.json`), so you run it once and the analytics persist across restarts
+- **Analytics dashboard** always visible — KPI cards, Plotly bar charts, and a paper-style TABLE II breakdown
 
 ---
 
-## Architecture
+## Systems
 
-```
-┌─────────────────────────────────────────────────────┐
-│                    Streamlit UI                      │
-│  ┌──────────────┐  ┌──────────────┐  ┌───────────┐  │
-│  │  System 1    │  │  System 2    │  │ System 3  │  │
-│  │  Baseline    │  │    RAG       │  │ Fine-Tuned│  │
-│  └──────┬───────┘  └──────┬───────┘  └─────┬─────┘  │
-└─────────┼─────────────────┼────────────────┼─────────┘
-          │                 │                │
-          ▼                 ▼                ▼
-   Groq API           FAISS index      Qwen2.5-1.5B
-   Llama 3.1 8B    +  HuggingFace   (LoRA adapter loaded
-   (prompt only)      embeddings     locally via PEFT)
-                          │
-                      Groq API
-                      Llama 3.1 8B
-                      (with context)
-```
-
-### System 1 — Baseline LLM
-Sends the question directly to **Llama 3.1 8B** (via Groq) with a short system prompt. No extra knowledge.
-
-### System 2 — RAG (Retrieval-Augmented Generation)
-1. The question is embedded with `all-MiniLM-L6-v2` (HuggingFace Sentence Transformers).
-2. Top-3 most similar chunks are retrieved from a **FAISS** vector store built from 22 documents (`.txt` files + any PDFs dropped into `data/pdfs/`).
-3. Those chunks are injected as context into the prompt sent to **Llama 3.1 8B** via Groq.
-
-### System 3 — Fine-Tuned Model
-**Qwen2.5-1.5B-Instruct** fine-tuned with **LoRA** on ~20 curated programming Q&A pairs. Training is done on Google Colab (free GPU). The adapter is loaded locally via `peft`.
+| System | Model | Method |
+|--------|-------|--------|
+| ⚡ Baseline LLM | Groq API (LLaMA 3) | Direct zero-shot prompting |
+| 🔍 RAG Chatbot | LLaMA 3 + FAISS | Retrieval-Augmented Generation |
+| 🧠 Fine-Tuned | Qwen2.5-1.5B-Instruct | LoRA fine-tuned on CS Q&A pairs |
 
 ---
 
-## Auto-Evaluation Metrics
+## Auto-Evaluation Metrics (TABLE II)
 
-All metrics are computed automatically — no user ratings needed.
-
-| Metric | How it's computed | Where it appears |
-|---|---|---|
-| **Accuracy** | Cosine similarity between answer embedding and reference answer embedding | Chip on each card · KPI card · Eval table |
-| **ROUGE-L** | Longest Common Subsequence F-measure vs reference answer | Chip on each card · KPI card · Eval table |
-| **Groundedness** | Cosine similarity between answer embedding and retrieved context embedding (RAG only) | Chip on RAG card |
-| **Context Relevance** | Cosine similarity between question embedding and retrieved context embedding (RAG only) | Chip on RAG card |
-| **Latency** | Wall-clock response time in seconds | Chip on each card · KPI card · Eval table |
-| **Win count** | System with highest accuracy per question gets a win | KPI card · Eval table |
-| **Low Confidence** | Answers with accuracy < 40% (possible hallucination) | ⚠️ badge · Eval table |
-
-Embeddings use `all-MiniLM-L6-v2` via LangChain. ROUGE-L uses the `rouge-score` library.
+| Metric | Description | Unit |
+|--------|-------------|------|
+| Answer Accuracy | Cosine similarity of answer vs reference embedding | % |
+| Groundedness Score | Cosine similarity of answer vs retrieved context | 0–1 |
+| Hallucination Rate | % of answers with accuracy < 0.5 | % |
+| Answer Relevance | Cosine similarity of answer vs question | 0–1 |
+| Faithfulness | ROUGE-L overlap with source context or reference | 0–1 |
+| Avg Response Time | Mean latency per query | sec |
+| Cost per Query | Token-count-based cost estimate | USD |
+| Overall Score (1–5) | Weighted composite: 30% Acc + 20% Ground + 20% (1−HR) + 15% Relevance + 15% Faith | rating |
 
 ---
 
-## Tech Stack
+## Knowledge Base (50 Topics)
 
-| Layer | Technology |
-|---|---|
-| UI | Streamlit |
-| LLM inference | Groq API — `llama-3.1-8b-instant` |
-| Embeddings | `sentence-transformers/all-MiniLM-L6-v2` |
-| Vector store | FAISS (CPU) via LangChain |
-| Fine-tuning | HuggingFace Transformers + PEFT (LoRA) |
-| Base model | Qwen/Qwen2.5-1.5B-Instruct |
-| Auto metrics | ROUGE-L (`rouge-score`) + cosine semantic similarity |
-| Charts | Plotly |
-| Training platform | Google Colab |
-| Background animation | HTML5 Canvas 3D particle network |
+Covers CS fundamentals, algorithms, web technologies, databases, and tooling:
 
----
+**Data Structures & Algorithms** — Binary Search, Merge Sort, QuickSort, Linked List, BST, Dynamic Programming, Recursion, Heap, Graph, DFS, BFS, Hash Table / Hash Map, Big O Notation, Trees, Inorder Traversal, Memoization, Stack vs Queue, Time & Space Complexity
 
-## Deploy to HuggingFace Spaces
+**Web & JavaScript** — React Hooks, useState, useEffect, REST API, HTTP Methods, HTTP Status Codes, JavaScript Promises, async/await, Closures, Event Loop, TypeScript
 
-1. Create a new Space at [huggingface.co/new-space](https://huggingface.co/new-space) — SDK: **Streamlit**
-2. Push this repo to the Space:
-   ```bash
-   git remote add space https://huggingface.co/spaces/YOUR_USERNAME/codesage
-   git push space main
-   ```
-3. Add your `GROQ_API_KEY` as a Space secret (Settings → Variables and secrets)
-4. The app launches automatically — the FAISS index is built on first run (~30s)
+**Styling** — CSS Flexbox, CSS Grid, flex-grow
 
-> System 3 (fine-tuned) will show "model unavailable" on Spaces unless you upload the `finetuned_model/` adapter folder to the Space repo.
+**Databases & Systems** — SQL, Primary Key, Foreign Key, Indexes, Normalization, Git, Merge Conflicts, Docker, JSON
 
----
-
-## How to Run Locally
-
-### 1. Clone & install
-```bash
-git clone https://github.com/Adityax-07/LLM-vs-RAG-vs-Fine-Tuning-.git
-cd LLM-vs-RAG-vs-Fine-Tuning-
-pip install -r requirements.txt
-```
-
-### 2. Set your Groq API key
-Create a `.env` file:
-```
-GROQ_API_KEY=your_key_here
-```
-Get a free key at [console.groq.com](https://console.groq.com).
-
-### 3. Run the app
-```bash
-streamlit run demo.py
-```
-The FAISS index is built automatically on first launch.
-
-### 4. (Optional) Expand the knowledge base with PDFs
-Drop any `.pdf` files into `data/pdfs/`, then delete `data/faiss_index/` and restart — PDFs are ingested automatically.
-
-### 5. (Optional) Load the fine-tuned model
-1. Open `system3_finetune_colab.ipynb` in Google Colab.
-2. Run all cells — trains **Qwen2.5-1.5B-Instruct** with LoRA, takes ~15 min on a free T4 GPU.
-3. Download `finetuned_model.zip` and unzip it in the project root.
-4. Restart the app — System 3 returns real answers.
-
----
-
-## Knowledge Base
-
-The RAG system retrieves from 22 documents in `data/docs/`:
-
-`binary_search` · `sorting_algorithms` · `dynamic_programming` · `graph_algorithms` · `trees` · `linked_list` · `stack_queue` · `recursion` · `backtracking` · `greedy_algorithms` · `hashing` · `string_algorithms` · `two_pointers` · `react_hooks` · `rest_api` · `javascript_promises` · `css_flexbox` · `big_o_notation` · `heaps` · `sql_basics` · `typescript_basics` · `git_basics`
-
-Plus any PDFs placed in `data/pdfs/`.
+**OOP** — Inheritance, Polymorphism, Encapsulation, Object-Oriented Programming
 
 ---
 
 ## Project Structure
 
 ```
-├── demo.py                       # Streamlit app
-├── system1_baseline.py           # Baseline LLM (Groq)
-├── system2_rag.py                # RAG pipeline (FAISS + PDF support + Groq)
-├── system3_inference.py          # Fine-tuned model inference (Qwen2.5-1.5B)
-├── system3_finetune_colab.ipynb  # LoRA training notebook
+.
+├── demo.py                         # Main Streamlit app
+├── system1_baseline.py             # Groq API baseline
+├── system2_rag.py                  # FAISS RAG pipeline
+├── system3_inference.py            # Fine-tuned model inference
+├── system3_finetune_colab.ipynb    # Qwen2.5 fine-tuning notebook (Colab)
+├── requirements.txt
 ├── data/
-│   ├── docs/                     # 22 knowledge base documents (.txt)
-│   ├── pdfs/                     # Drop PDFs here to expand the knowledge base
-│   ├── faiss_index/              # FAISS vector store (auto-built)
-│   ├── reference_answers.json    # Reference answers for ROUGE-L / semantic similarity
-│   ├── finetune_data.jsonl       # Training data for fine-tuning
-│   └── questions.csv             # Evaluation question set
-├── finetuned_model/              # LoRA adapter (after training)
-└── requirements.txt
+│   ├── reference_answers.json      # 50 Q&A pairs for auto-evaluation
+│   ├── benchmark_cache.json        # Persisted benchmark results (generated on first run)
+│   ├── finetune_data.jsonl         # Training data in ChatML format
+│   ├── faiss_index/                # FAISS vector store (built automatically)
+│   ├── docs/                       # Knowledge base .txt files
+│   └── pdfs/                       # Drop PDFs here to ingest into RAG
+└── evaluate.py                     # Standalone evaluation script
 ```
+
+---
+
+## Setup
+
+### 1. Clone & install
+
+```bash
+git clone https://github.com/Adityax-07/LLM-vs-RAG-vs-Fine-Tuning-.git
+cd LLM-vs-RAG-vs-Fine-Tuning-
+pip install -r requirements.txt
+```
+
+### 2. Set your API key
+
+Create a `.env` file:
+
+```
+GROQ_API_KEY=your_groq_api_key_here
+```
+
+Get a free key at [console.groq.com](https://console.groq.com).
+
+### 3. Run the app
+
+```bash
+streamlit run demo.py
+```
+
+The FAISS vector store is built automatically on first launch.
+
+### 4. (Optional) Fine-tune the model
+
+Open `system3_finetune_colab.ipynb` in Google Colab, run all cells, then download the resulting `finetuned_model/` folder and place it in the project root.
+
+### 5. Run the benchmark (once)
+
+Click **Run Auto-Benchmark** in the Analytics tab. Results are saved to `data/benchmark_cache.json` and displayed permanently on every subsequent app load — no need to re-run.
+
+---
+
+## Adding PDFs to the Knowledge Base
+
+Drop any PDF into `data/pdfs/` and restart the app. The RAG pipeline ingests PDFs automatically via `pypdf`.
+
+---
+
+## Tech Stack
+
+| Layer | Library |
+|-------|---------|
+| UI | Streamlit, Plotly |
+| Embeddings | sentence-transformers (`all-MiniLM-L6-v2`) |
+| Vector Store | FAISS (via LangChain) |
+| LLM API | Groq (LLaMA 3) |
+| Fine-Tuning | Hugging Face Transformers + PEFT (LoRA) |
+| Metrics | rouge-score, numpy (cosine similarity) |
+| PDF Ingestion | pypdf via LangChain |
+
+---
+
+## Deploy on Hugging Face Spaces
+
+```yaml
+---
+title: CodeSage
+emoji: 🧙
+colorFrom: blue
+colorTo: purple
+sdk: streamlit
+sdk_version: "1.35.0"
+app_file: demo.py
+pinned: false
+---
+```
+
+Add `GROQ_API_KEY` as a Space secret.

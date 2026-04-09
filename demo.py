@@ -21,7 +21,13 @@ if "rating_submitted" not in st.session_state: st.session_state.rating_submitted
 if "input_question"   not in st.session_state: st.session_state.input_question   = ""
 if "auto_run"         not in st.session_state: st.session_state.auto_run         = False
 if "auto_metrics"      not in st.session_state: st.session_state.auto_metrics      = {}
-if "benchmark_results" not in st.session_state: st.session_state.benchmark_results = []
+if "benchmark_results" not in st.session_state:
+    _bm_cache = "data/benchmark_cache.json"
+    if os.path.exists(_bm_cache):
+        with open(_bm_cache, encoding="utf-8") as _f:
+            st.session_state.benchmark_results = json.load(_f)
+    else:
+        st.session_state.benchmark_results = []
 if "winner"            not in st.session_state: st.session_state.winner            = None
 if "halluc_flags"      not in st.session_state: st.session_state.halluc_flags      = {}
 
@@ -274,6 +280,9 @@ div[data-testid="stTextInput"] label {
     border-bottom: 1px solid #0d1424; color: #cbd5e1;
 }
 .eval-table td:first-child { text-align: left; color: #475569; font-weight: 600; }
+.eval-table td:nth-child(5) { border-left: 1px solid #1a2540; }
+.eval-table td:nth-child(6),
+.eval-table th:nth-child(6) { color: #475569; font-size: 11px; }
 .eval-table tr:last-child td { border-bottom: none; }
 .eval-table tr:hover td { background: rgba(255,255,255,.015); }
 .badge {
@@ -405,37 +414,53 @@ def compute_auto_metrics(answer: str, question: str, context: str = "") -> dict:
     if not answer:
         return {}
     try:
+        from rouge_score import rouge_scorer as rs
+        scorer = rs.RougeScorer(["rougeL"], use_stemmer=True)
+
         a_emb = np.array(vs.embeddings.embed_query(answer))
         q_emb = np.array(vs.embeddings.embed_query(question))
 
-        # accuracy vs reference answer
+        # answer relevance — how well the answer addresses the question
+        answer_relevance = round(max(0.0, _cosine(a_emb, q_emb)), 3)
+
+        # accuracy + rouge vs reference answer
         ref = ref_answers.get(question.strip().lower())
         accuracy = None
         rouge_l  = None
+        r_emb    = None
         if ref:
-            from rouge_score import rouge_scorer as rs
-            scorer  = rs.RougeScorer(["rougeL"], use_stemmer=True)
-            rouge_l = round(scorer.score(ref, answer)["rougeL"].fmeasure, 3)
-            r_emb   = np.array(vs.embeddings.embed_query(ref))
+            rouge_l  = round(scorer.score(ref, answer)["rougeL"].fmeasure, 3)
+            r_emb    = np.array(vs.embeddings.embed_query(ref))
             accuracy = round(max(0.0, _cosine(a_emb, r_emb)), 3)
 
-        # groundedness — how much answer resembles retrieved context
+        # groundedness — how much answer is grounded in retrieved context (RAG)
+        # for non-RAG systems use accuracy as proxy
         groundedness = None
         if context and context.strip():
             c_emb = np.array(vs.embeddings.embed_query(context[:1000]))
             groundedness = round(max(0.0, _cosine(a_emb, c_emb)), 3)
+        elif accuracy is not None:
+            groundedness = accuracy  # proxy for non-RAG systems
 
-        # context relevance — how relevant retrieved context is to question
+        # faithfulness — lexical overlap with source (context for RAG, reference otherwise)
+        faithfulness = None
+        if context and context.strip():
+            faithfulness = round(scorer.score(context[:1000], answer)["rougeL"].fmeasure, 3)
+        elif ref:
+            faithfulness = rouge_l  # proxy: ROUGE-L vs reference for non-RAG
+
+        # context relevance — how relevant retrieved context is to question (RAG only)
         ctx_relevance = None
         if context and context.strip():
             c_emb2 = np.array(vs.embeddings.embed_query(context[:1000]))
             ctx_relevance = round(max(0.0, _cosine(q_emb, c_emb2)), 3)
 
-        result = {}
-        if accuracy    is not None: result["accuracy"]     = accuracy
-        if rouge_l     is not None: result["rouge_l"]      = rouge_l
-        if groundedness   is not None: result["groundedness"]  = groundedness
-        if ctx_relevance  is not None: result["ctx_relevance"] = ctx_relevance
+        result = {"answer_relevance": answer_relevance}
+        if accuracy      is not None: result["accuracy"]      = accuracy
+        if rouge_l       is not None: result["rouge_l"]       = rouge_l
+        if groundedness  is not None: result["groundedness"]  = groundedness
+        if faithfulness  is not None: result["faithfulness"]  = faithfulness
+        if ctx_relevance is not None: result["ctx_relevance"] = ctx_relevance
         return result
     except Exception:
         return {}
@@ -458,14 +483,19 @@ def metric_chips(m: dict, time_s: float = None) -> str:
     return "".join(parts)
 
 # ── Benchmark runner ──────────────────────────────────────────────────────────
-BENCHMARK_QUESTIONS = [
-    "What is binary search?",
-    "Stack vs Queue?",
-    "Explain merge sort.",
-    "What are React hooks?",
-    "What is a REST API?",
-    "What is dynamic programming?",
-]
+import json as _json
+with open("data/reference_answers.json") as _f:
+    BENCHMARK_QUESTIONS = list(_json.load(_f).keys())
+
+def _estimate_cost(answer: str, system: str) -> float:
+    """Rough per-query cost estimate in USD based on token count and system type."""
+    tokens = max(1, len(answer.split()))
+    if system == "r1":    # Baseline: Groq API call, ~800 input + output tokens
+        return round(0.001 + tokens * 0.0000059, 4)
+    elif system == "r2":  # RAG: extra context tokens increase cost ~1.8x
+        return round(0.0015 + tokens * 0.0000059 * 1.8, 4)
+    else:                 # Fine-tuned: local inference, lower per-token cost
+        return round(tokens * 0.0000015, 4)
 
 def run_benchmark(progress_bar=None):
     results = []
@@ -479,14 +509,21 @@ def run_benchmark(progress_bar=None):
         r1 = ask_baseline(q)
         r2 = ask_rag(q, vs)
         r3 = ask_finetuned(q) if has_ft else {"answer": "", "response_time": 0}
+        ctx = r2.get("context_used", "")
         m1 = compute_auto_metrics(r1["answer"], q)
-        m2 = compute_auto_metrics(r2["answer"], q)
+        m2 = compute_auto_metrics(r2["answer"], q, context=ctx)
         m3 = compute_auto_metrics(r3["answer"], q)
         results.append({
             "question": q,
             "r1_time": r1["response_time"], "r2_time": r2["response_time"], "r3_time": r3["response_time"],
-            "r1_rouge": m1.get("rouge_l", 0), "r2_rouge": m2.get("rouge_l", 0), "r3_rouge": m3.get("rouge_l", 0),
-            "r1_sim":   m1.get("accuracy", 0), "r2_sim":   m2.get("accuracy", 0), "r3_sim":   m3.get("accuracy", 0),
+            "r1_rouge": m1.get("rouge_l", 0),        "r2_rouge": m2.get("rouge_l", 0),        "r3_rouge": m3.get("rouge_l", 0),
+            "r1_sim":   m1.get("accuracy", 0),        "r2_sim":   m2.get("accuracy", 0),        "r3_sim":   m3.get("accuracy", 0),
+            "r1_ground": m1.get("groundedness", 0),   "r2_ground": m2.get("groundedness", 0),   "r3_ground": m3.get("groundedness", 0),
+            "r1_relev":  m1.get("answer_relevance", 0),"r2_relev":  m2.get("answer_relevance", 0),"r3_relev":  m3.get("answer_relevance", 0),
+            "r1_faith":  m1.get("faithfulness", 0),   "r2_faith":  m2.get("faithfulness", 0),   "r3_faith":  m3.get("faithfulness", 0),
+            "r1_cost": _estimate_cost(r1["answer"], "r1"),
+            "r2_cost": _estimate_cost(r2["answer"], "r2"),
+            "r3_cost": _estimate_cost(r3["answer"], "r3"),
         })
     return results
 
@@ -494,17 +531,58 @@ def benchmark_kpis(results):
     n = len(results)
     if n == 0:
         return {}
-    def mean(key): return round(sum(r[key] for r in results) / n, 3)
+    def mean(key): return round(sum(r.get(key, 0) for r in results) / n, 3)
+
+    r1_acc = round(mean("r1_sim") * 100, 1)
+    r2_acc = round(mean("r2_sim") * 100, 1)
+    r3_acc = round(mean("r3_sim") * 100, 1)
+
+    def halluc_rate(sim_key):
+        flagged = sum(1 for r in results if 0 < r.get(sim_key, 0) < 0.5)
+        return round(flagged / n * 100, 1)
+
+    r1_hr = halluc_rate("r1_sim")
+    r2_hr = halluc_rate("r2_sim")
+    r3_hr = halluc_rate("r3_sim")
+
+    r1_ground = mean("r1_ground")
+    r2_ground = mean("r2_ground")
+    r3_ground = mean("r3_ground")
+
+    r1_relev = mean("r1_relev")
+    r2_relev = mean("r2_relev")
+    r3_relev = mean("r3_relev")
+
+    r1_faith = mean("r1_faith")
+    r2_faith = mean("r2_faith")
+    r3_faith = mean("r3_faith")
+
+    r1_cost = round(mean("r1_cost"), 4)
+    r2_cost = round(mean("r2_cost"), 4)
+    r3_cost = round(mean("r3_cost"), 4)
+
+    def overall(acc_pct, ground, hr, relev, faith):
+        score = (
+            acc_pct / 100 * 0.30 +
+            ground        * 0.20 +
+            (1 - hr/100)  * 0.20 +
+            relev         * 0.15 +
+            faith         * 0.15
+        )
+        return round(score * 5, 1)
+
     return {
-        "r1_acc":   round(mean("r1_sim") * 100, 1),
-        "r2_acc":   round(mean("r2_sim") * 100, 1),
-        "r3_acc":   round(mean("r3_sim") * 100, 1),
-        "r1_rouge": mean("r1_rouge"),
-        "r2_rouge": mean("r2_rouge"),
-        "r3_rouge": mean("r3_rouge"),
-        "r1_time":  mean("r1_time"),
-        "r2_time":  mean("r2_time"),
-        "r3_time":  mean("r3_time"),
+        "r1_acc": r1_acc, "r2_acc": r2_acc, "r3_acc": r3_acc,
+        "r1_rouge": mean("r1_rouge"), "r2_rouge": mean("r2_rouge"), "r3_rouge": mean("r3_rouge"),
+        "r1_time": mean("r1_time"),   "r2_time": mean("r2_time"),   "r3_time": mean("r3_time"),
+        "r1_ground": r1_ground, "r2_ground": r2_ground, "r3_ground": r3_ground,
+        "r1_relev": r1_relev,   "r2_relev": r2_relev,   "r3_relev": r3_relev,
+        "r1_faith": r1_faith,   "r2_faith": r2_faith,   "r3_faith": r3_faith,
+        "r1_hr": r1_hr,         "r2_hr": r2_hr,         "r3_hr": r3_hr,
+        "r1_cost": r1_cost,     "r2_cost": r2_cost,     "r3_cost": r3_cost,
+        "r1_overall": overall(r1_acc, r1_ground, r1_hr, r1_relev, r1_faith),
+        "r2_overall": overall(r2_acc, r2_ground, r2_hr, r2_relev, r2_faith),
+        "r3_overall": overall(r3_acc, r3_ground, r3_hr, r3_relev, r3_faith),
         "n": n,
     }
 
@@ -625,9 +703,9 @@ sample_questions = [
 ]
 
 st.markdown('<div class="section-label">Quick questions</div>', unsafe_allow_html=True)
-cols = st.columns(len(sample_questions))
+_sq_cols = st.columns(3)
 for i, sq in enumerate(sample_questions):
-    if cols[i].button(sq, key=f"sq_{i}", use_container_width=True):
+    if _sq_cols[i % 3].button(sq, key=f"sq_{i}", use_container_width=True):
         st.session_state.input_question = sq
         st.session_state.auto_run = True
         st.rerun()
@@ -813,9 +891,11 @@ st.markdown("""
 # ── Benchmark button + KPI cards ──────────────────────────────────────────────
 _bm_col, _ = st.columns([2, 5])
 with _bm_col:
-    if st.button("🔬 Run Auto-Benchmark", key="run_bm", help="Runs all 6 questions through all 3 systems and computes metrics automatically"):
+    if st.button("🔬 Run Auto-Benchmark", key="run_bm", help=f"Runs all {len(BENCHMARK_QUESTIONS)} questions through all 3 systems and computes metrics automatically"):
         _prog = st.progress(0, text="Starting benchmark...")
         st.session_state.benchmark_results = run_benchmark(progress_bar=_prog)
+        with open("data/benchmark_cache.json", "w", encoding="utf-8") as _f:
+            json.dump(st.session_state.benchmark_results, _f)
         _prog.progress(1.0, text="Done!")
         st.rerun()
 
@@ -825,108 +905,155 @@ _bm   = st.session_state.benchmark_results
 def badge(val, cls):
     return f'<span class="badge {cls}">{val}</span>'
 
-if _bm:
-    _kpi = benchmark_kpis(_bm)
-    _systems = ["Baseline LLM", "RAG Chatbot", "Fine-Tuned"]
-    _colors  = ["#3b82f6", "#10b981", "#8b5cf6"]
-    _layout  = dict(
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="#94a3b8", size=12),
-        legend=dict(bgcolor="rgba(0,0,0,0)", bordercolor="#1e293b", borderwidth=1),
-        xaxis=dict(gridcolor="#1a2540", linecolor="#1a2540"),
-        yaxis=dict(gridcolor="#1a2540", linecolor="#1a2540"),
-        margin=dict(l=20, r=20, t=48, b=20),
-    )
+# ── Always compute KPI values (real data or zeros) ───────────────────────────
+_zero_kpi = {k: 0 for k in [
+    'r1_acc','r2_acc','r3_acc','r1_ground','r2_ground','r3_ground',
+    'r1_time','r2_time','r3_time','r1_hr','r2_hr','r3_hr',
+    'r1_relev','r2_relev','r3_relev','r1_faith','r2_faith','r3_faith',
+    'r1_cost','r2_cost','r3_cost','r1_overall','r2_overall','r3_overall',
+    'r1_rouge','r2_rouge','r3_rouge',
+]}
+_kpi     = benchmark_kpis(_bm) if _bm else _zero_kpi
+_wins    = {"r1": 0, "r2": 0, "r3": 0}
+for _row in _bm:
+    _row_accs = {k: _row.get(f"{k}_sim", 0) for k in ("r1","r2","r3")}
+    _best = max(_row_accs, key=_row_accs.get)
+    if _row_accs[_best] > 0:
+        _wins[_best] += 1
+_n_q     = len(_bm)
+_has_data = bool(_bm)
 
-    # Win count per system
-    _wins = {"r1": 0, "r2": 0, "r3": 0}
-    _halluc_counts = {"r1": 0, "r2": 0, "r3": 0}
-    for _row in _bm:
-        _row_accs = {k: _row[f"{k}_sim"] for k in ("r1","r2","r3")}
-        _best = max(_row_accs, key=_row_accs.get)
-        if _row_accs[_best] > 0:
-            _wins[_best] += 1
-        for k in ("r1","r2","r3"):
-            if 0 < _row_accs[k] < 0.4:
-                _halluc_counts[k] += 1
+_systems = ["Baseline LLM", "RAG Chatbot", "Fine-Tuned"]
+_colors  = ["#3b82f6", "#10b981", "#8b5cf6"]
+_layout  = dict(
+    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+    font=dict(color="#94a3b8", size=12),
+    legend=dict(bgcolor="rgba(0,0,0,0)", bordercolor="#1e293b", borderwidth=1),
+    xaxis=dict(gridcolor="#1a2540", linecolor="#1a2540"),
+    yaxis=dict(gridcolor="#1a2540", linecolor="#1a2540"),
+    margin=dict(l=20, r=20, t=48, b=20),
+)
 
-    _n_q = len(_bm)
-
-    # KPI cards
-    st.markdown(f"""
-    <div class="kpi-grid">
-      <div class="kpi-card kpi-card-blue">
-        <div class="kpi-system kpi-system-blue">⚡ Baseline LLM</div>
-        <div class="kpi-stats">
-          <div class="kpi-stat"><span class="kpi-val kpi-val-blue">{_kpi['r1_acc']}%</span><span class="kpi-label">Accuracy</span></div>
-          <div class="kpi-stat"><span class="kpi-val kpi-val-blue">{_kpi['r1_rouge']}</span><span class="kpi-label">ROUGE-L</span></div>
-          <div class="kpi-stat"><span class="kpi-val kpi-val-blue">{_kpi['r1_time']}s</span><span class="kpi-label">Avg Latency</span></div>
-          <div class="kpi-stat"><span class="kpi-val kpi-val-blue">{_wins['r1']}/{_n_q}</span><span class="kpi-label">Wins</span></div>
-        </div>
-      </div>
-      <div class="kpi-card kpi-card-teal">
-        <div class="kpi-system kpi-system-teal">🔍 RAG Chatbot</div>
-        <div class="kpi-stats">
-          <div class="kpi-stat"><span class="kpi-val kpi-val-teal">{_kpi['r2_acc']}%</span><span class="kpi-label">Accuracy</span></div>
-          <div class="kpi-stat"><span class="kpi-val kpi-val-teal">{_kpi['r2_rouge']}</span><span class="kpi-label">ROUGE-L</span></div>
-          <div class="kpi-stat"><span class="kpi-val kpi-val-teal">{_kpi['r2_time']}s</span><span class="kpi-label">Avg Latency</span></div>
-          <div class="kpi-stat"><span class="kpi-val kpi-val-teal">{_wins['r2']}/{_n_q}</span><span class="kpi-label">Wins</span></div>
-        </div>
-      </div>
-      <div class="kpi-card kpi-card-purple">
-        <div class="kpi-system kpi-system-purple">🧠 Fine-Tuned</div>
-        <div class="kpi-stats">
-          <div class="kpi-stat"><span class="kpi-val kpi-val-purple">{_kpi['r3_acc']}%</span><span class="kpi-label">Accuracy</span></div>
-          <div class="kpi-stat"><span class="kpi-val kpi-val-purple">{_kpi['r3_rouge']}</span><span class="kpi-label">ROUGE-L</span></div>
-          <div class="kpi-stat"><span class="kpi-val kpi-val-purple">{_kpi['r3_time']}s</span><span class="kpi-label">Avg Latency</span></div>
-          <div class="kpi-stat"><span class="kpi-val kpi-val-purple">{_wins['r3']}/{_n_q}</span><span class="kpi-label">Wins</span></div>
-        </div>
-      </div>
+# ── KPI cards (always visible) ────────────────────────────────────────────────
+_kpi_val = lambda v, fmt: fmt.format(v) if _has_data else "—"
+st.markdown(f"""
+<div class="kpi-grid">
+  <div class="kpi-card kpi-card-blue">
+    <div class="kpi-system kpi-system-blue">⚡ Baseline LLM</div>
+    <div class="kpi-stats">
+      <div class="kpi-stat"><span class="kpi-val kpi-val-blue">{_kpi_val(_kpi['r1_acc'], '{:.1f}%')}</span><span class="kpi-label">Accuracy</span></div>
+      <div class="kpi-stat"><span class="kpi-val kpi-val-blue">{_kpi_val(_kpi['r1_ground'], '{:.2f}')}</span><span class="kpi-label">Grounded</span></div>
+      <div class="kpi-stat"><span class="kpi-val kpi-val-blue">{_kpi_val(_kpi['r1_time'], '{:.2f}s')}</span><span class="kpi-label">Avg Latency</span></div>
+      <div class="kpi-stat"><span class="kpi-val kpi-val-blue">{f"{_wins['r1']}/{_n_q}" if _has_data else '—'}</span><span class="kpi-label">Wins</span></div>
     </div>
-    """, unsafe_allow_html=True)
+  </div>
+  <div class="kpi-card kpi-card-teal">
+    <div class="kpi-system kpi-system-teal">🔍 RAG Chatbot</div>
+    <div class="kpi-stats">
+      <div class="kpi-stat"><span class="kpi-val kpi-val-teal">{_kpi_val(_kpi['r2_acc'], '{:.1f}%')}</span><span class="kpi-label">Accuracy</span></div>
+      <div class="kpi-stat"><span class="kpi-val kpi-val-teal">{_kpi_val(_kpi['r2_ground'], '{:.2f}')}</span><span class="kpi-label">Grounded</span></div>
+      <div class="kpi-stat"><span class="kpi-val kpi-val-teal">{_kpi_val(_kpi['r2_time'], '{:.2f}s')}</span><span class="kpi-label">Avg Latency</span></div>
+      <div class="kpi-stat"><span class="kpi-val kpi-val-teal">{f"{_wins['r2']}/{_n_q}" if _has_data else '—'}</span><span class="kpi-label">Wins</span></div>
+    </div>
+  </div>
+  <div class="kpi-card kpi-card-purple">
+    <div class="kpi-system kpi-system-purple">🧠 Fine-Tuned</div>
+    <div class="kpi-stats">
+      <div class="kpi-stat"><span class="kpi-val kpi-val-purple">{_kpi_val(_kpi['r3_acc'], '{:.1f}%')}</span><span class="kpi-label">Accuracy</span></div>
+      <div class="kpi-stat"><span class="kpi-val kpi-val-purple">{_kpi_val(_kpi['r3_ground'], '{:.2f}')}</span><span class="kpi-label">Grounded</span></div>
+      <div class="kpi-stat"><span class="kpi-val kpi-val-purple">{_kpi_val(_kpi['r3_time'], '{:.2f}s')}</span><span class="kpi-label">Avg Latency</span></div>
+      <div class="kpi-stat"><span class="kpi-val kpi-val-purple">{f"{_wins['r3']}/{_n_q}" if _has_data else '—'}</span><span class="kpi-label">Wins</span></div>
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+if _has_data:
     st.caption(f"Benchmark across {_n_q} questions · semantic similarity via embeddings · ROUGE-L vs reference answers")
-
-    # Charts
-    ch1, ch2 = st.columns(2)
-    with ch1:
-        fig1 = go.Figure()
-        fig1.add_trace(go.Bar(name="Accuracy %", x=_systems,
-            y=[_kpi['r1_acc'], _kpi['r2_acc'], _kpi['r3_acc']],
-            marker_color=_colors, text=[f"{v}%" for v in [_kpi['r1_acc'],_kpi['r2_acc'],_kpi['r3_acc']]], textposition="auto"))
-        fig1.add_trace(go.Bar(name="ROUGE-L ×100", x=_systems,
-            y=[round(_kpi['r1_rouge']*100,1), round(_kpi['r2_rouge']*100,1), round(_kpi['r3_rouge']*100,1)],
-            marker_color=_colors, opacity=0.55,
-            text=[f"{round(v*100,1)}" for v in [_kpi['r1_rouge'],_kpi['r2_rouge'],_kpi['r3_rouge']]], textposition="auto"))
-        fig1.update_layout(**_layout, barmode="group", height=300,
-            title=dict(text="Accuracy % vs ROUGE-L (scaled ×100)", font=dict(color="#e2e8f0", size=14)))
-        st.plotly_chart(fig1, use_container_width=True)
-
-    with ch2:
-        fig2 = go.Figure()
-        fig2.add_trace(go.Bar(name="Avg Latency (s)", x=_systems,
-            y=[_kpi['r1_time'], _kpi['r2_time'], _kpi['r3_time']],
-            marker_color=_colors, text=[f"{v}s" for v in [_kpi['r1_time'],_kpi['r2_time'],_kpi['r3_time']]], textposition="auto"))
-        fig2.add_trace(go.Bar(name="Low Confidence answers", x=_systems,
-            y=[_halluc_counts['r1'], _halluc_counts['r2'], _halluc_counts['r3']],
-            marker_color=_colors, opacity=0.55,
-            text=[str(v) for v in [_halluc_counts['r1'],_halluc_counts['r2'],_halluc_counts['r3']]], textposition="auto"))
-        fig2.update_layout(**_layout, barmode="group", height=300,
-            title=dict(text="Avg Latency (s) · Low-Confidence Answers", font=dict(color="#e2e8f0", size=14)))
-        st.plotly_chart(fig2, use_container_width=True)
-
-    def _col_acc(v): return "badge-green" if v >= 75 else ("badge-yellow" if v >= 55 else "badge-red")
-    def _col_rou(v): return "badge-green" if v >= 0.4 else ("badge-yellow" if v >= 0.2 else "badge-red")
-    def _col_time(v): return "badge-green" if v <= 1.0 else ("badge-yellow" if v <= 2.5 else "badge-red")
-    def _col_halluc(v, n): return "badge-green" if v == 0 else ("badge-yellow" if v <= n//2 else "badge-red")
-
-    bm_row_acc    = tuple(badge(f"{_kpi[f'r{i}_acc']}%",   _col_acc(_kpi[f'r{i}_acc']))   for i in (1,2,3))
-    bm_row_rouge  = tuple(badge(f"{_kpi[f'r{i}_rouge']}",  _col_rou(_kpi[f'r{i}_rouge'])) for i in (1,2,3))
-    bm_row_time   = tuple(badge(f"{_kpi[f'r{i}_time']}s",  _col_time(_kpi[f'r{i}_time'])) for i in (1,2,3))
-    bm_row_wins   = tuple(badge(f"{_wins[f'r{i}']}/{_n_q}", "badge-green" if _wins[f'r{i}']==max(_wins.values()) else "badge-yellow") for i in (1,2,3))
-    bm_row_halluc = tuple(badge(f"{_halluc_counts[f'r{i}']}",_col_halluc(_halluc_counts[f'r{i}'],_n_q)) for i in (1,2,3))
 else:
-    st.caption("Run the benchmark to populate the analytics table.")
-    bm_row_acc = bm_row_rouge = bm_row_time = bm_row_wins = bm_row_halluc = (_dash, _dash, _dash)
+    st.caption("Run the benchmark above to populate results.")
+
+# ── Charts (always visible) ───────────────────────────────────────────────────
+_no_data_annotation = [] if _has_data else [dict(
+    text="Run benchmark to see results", showarrow=False,
+    xref="paper", yref="paper", x=0.5, y=0.5,
+    font=dict(color="#475569", size=14),
+)]
+
+ch1, ch2 = st.columns(2)
+with ch1:
+    fig1 = go.Figure()
+    fig1.add_trace(go.Bar(name="Accuracy %", x=_systems,
+        y=[_kpi['r1_acc'], _kpi['r2_acc'], _kpi['r3_acc']],
+        marker_color=_colors,
+        text=[f"{v}%" for v in [_kpi['r1_acc'],_kpi['r2_acc'],_kpi['r3_acc']]] if _has_data else ["","",""],
+        textposition="auto"))
+    fig1.add_trace(go.Bar(name="Groundedness ×100", x=_systems,
+        y=[round(_kpi['r1_ground']*100,1), round(_kpi['r2_ground']*100,1), round(_kpi['r3_ground']*100,1)],
+        marker_color=_colors, opacity=0.55,
+        text=[f"{round(v*100,1)}" for v in [_kpi['r1_ground'],_kpi['r2_ground'],_kpi['r3_ground']]] if _has_data else ["","",""],
+        textposition="auto"))
+    fig1.update_layout(**_layout, barmode="group", height=300,
+        annotations=_no_data_annotation,
+        title=dict(text="Accuracy % vs Groundedness Score (scaled ×100)", font=dict(color="#e2e8f0", size=14)))
+    st.plotly_chart(fig1, use_container_width=True)
+
+with ch2:
+    fig2 = go.Figure()
+    fig2.add_trace(go.Bar(name="Avg Latency (s)", x=_systems,
+        y=[_kpi['r1_time'], _kpi['r2_time'], _kpi['r3_time']],
+        marker_color=_colors,
+        text=[f"{v}s" for v in [_kpi['r1_time'],_kpi['r2_time'],_kpi['r3_time']]] if _has_data else ["","",""],
+        textposition="auto"))
+    fig2.add_trace(go.Bar(name="Hallucination Rate %", x=_systems,
+        y=[_kpi['r1_hr'], _kpi['r2_hr'], _kpi['r3_hr']],
+        marker_color=_colors, opacity=0.55,
+        text=[f"{v}%" for v in [_kpi['r1_hr'],_kpi['r2_hr'],_kpi['r3_hr']]] if _has_data else ["","",""],
+        textposition="auto"))
+    fig2.update_layout(**_layout, barmode="group", height=300,
+        annotations=_no_data_annotation,
+        title=dict(text="Avg Latency (s) · Hallucination Rate %", font=dict(color="#e2e8f0", size=14)))
+    st.plotly_chart(fig2, use_container_width=True)
+
+# ── Table row helpers ─────────────────────────────────────────────────────────
+def _g(v, good, mid): return "badge-green" if v >= good else ("badge-yellow" if v >= mid else "badge-red")
+def _l(v, good, mid): return "badge-green" if v <= good else ("badge-yellow" if v <= mid else "badge-red")
+
+def _row_cells(vals, fmt_fn, col_fn):
+    if not _has_data:
+        return (_dash, _dash, _dash)
+    return tuple(badge(fmt_fn(v), col_fn(v)) for v in vals)
+
+_acc = (_kpi['r1_acc'],     _kpi['r2_acc'],     _kpi['r3_acc'])
+_grd = (_kpi['r1_ground'],  _kpi['r2_ground'],  _kpi['r3_ground'])
+_hr  = (_kpi['r1_hr'],      _kpi['r2_hr'],      _kpi['r3_hr'])
+_rel = (_kpi['r1_relev'],   _kpi['r2_relev'],   _kpi['r3_relev'])
+_fth = (_kpi['r1_faith'],   _kpi['r2_faith'],   _kpi['r3_faith'])
+_tm  = (_kpi['r1_time'],    _kpi['r2_time'],    _kpi['r3_time'])
+_cst = (_kpi['r1_cost'],    _kpi['r2_cost'],    _kpi['r3_cost'])
+_ov  = (_kpi['r1_overall'], _kpi['r2_overall'], _kpi['r3_overall'])
+
+bm_acc = _row_cells(_acc, lambda v: f"{v}%",      lambda v: _g(v, 75, 55))
+bm_grd = _row_cells(_grd, lambda v: f"{v:.2f}",   lambda v: _g(v, 0.75, 0.5))
+bm_hr  = _row_cells(_hr,  lambda v: f"{v}%",      lambda v: _l(v, 15, 30))
+bm_rel = _row_cells(_rel, lambda v: f"{v:.2f}",   lambda v: _g(v, 0.75, 0.55))
+bm_fth = _row_cells(_fth, lambda v: f"{v:.2f}",   lambda v: _g(v, 0.6, 0.35))
+bm_tm  = _row_cells(_tm,  lambda v: f"{v}s",      lambda v: _l(v, 1.0, 2.5))
+bm_cst = _row_cells(_cst, lambda v: f"${v:.4f}",  lambda v: _l(v, 0.001, 0.003))
+bm_ov  = _row_cells(_ov,  lambda v: f"{v}/5",     lambda v: _g(v, 4.0, 2.5))
+
+def _best_high_badge(vals):
+    labels = ["Baseline LLM", "RAG", "Fine-Tuned"]
+    best = labels[list(vals).index(max(vals))]
+    cls = "badge-green" if best == "RAG" else ("badge-yellow" if best == "Fine-Tuned" else "badge-grey")
+    return f'<span class="badge {cls}">{best}</span>'
+
+def _best_low_badge(vals):
+    labels = ["Baseline LLM", "RAG", "Fine-Tuned"]
+    best = labels[list(vals).index(min(vals))]
+    cls = "badge-green" if best == "Fine-Tuned" else ("badge-yellow" if best == "RAG" else "badge-grey")
+    return f'<span class="badge {cls}">{best}</span>'
+
+_unit = lambda u: f'<span style="color:#475569;font-size:11px;font-weight:600">{u}</span>'
 
 st.markdown(f"""
 <div class="eval-wrap">
@@ -937,28 +1064,50 @@ st.markdown(f"""
       <th class="col-blue">⚡ System 1<br><span style="font-weight:500;font-size:11px;opacity:.6">Baseline LLM</span></th>
       <th class="col-teal">🔍 System 2<br><span style="font-weight:500;font-size:11px;opacity:.6">RAG Chatbot</span></th>
       <th class="col-purple">🧠 System 3<br><span style="font-weight:500;font-size:11px;opacity:.6">Fine-Tuned</span></th>
+      <th>Best</th>
+      <th>Unit</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td>Answer Accuracy <span class="metric-note">(%, semantic similarity vs reference)</span></td>
-      <td>{bm_row_acc[0]}</td><td>{bm_row_acc[1]}</td><td>{bm_row_acc[2]}</td>
+      <td>Answer Accuracy</td>
+      <td>{bm_acc[0]}</td><td>{bm_acc[1]}</td><td>{bm_acc[2]}</td>
+      <td>{_best_high_badge(_acc) if _bm else _dash}</td><td>{_unit('%')}</td>
     </tr>
     <tr>
-      <td>ROUGE-L Score <span class="metric-note">(lexical overlap vs reference)</span></td>
-      <td>{bm_row_rouge[0]}</td><td>{bm_row_rouge[1]}</td><td>{bm_row_rouge[2]}</td>
+      <td>Groundedness Score</td>
+      <td>{bm_grd[0]}</td><td>{bm_grd[1]}</td><td>{bm_grd[2]}</td>
+      <td>{_best_high_badge(_grd) if _bm else _dash}</td><td>{_unit('0–1')}</td>
     </tr>
     <tr>
-      <td>Low-Confidence Answers <span class="metric-note">(accuracy &lt; 40%, possible hallucination)</span></td>
-      <td>{bm_row_halluc[0]}</td><td>{bm_row_halluc[1]}</td><td>{bm_row_halluc[2]}</td>
+      <td>Hallucination Rate</td>
+      <td>{bm_hr[0]}</td><td>{bm_hr[1]}</td><td>{bm_hr[2]}</td>
+      <td>{_best_low_badge(_hr) if _bm else _dash}</td><td>{_unit('%')}</td>
     </tr>
     <tr>
-      <td>Avg Response Time <span class="metric-note">(seconds, auto)</span></td>
-      <td>{bm_row_time[0]}</td><td>{bm_row_time[1]}</td><td>{bm_row_time[2]}</td>
+      <td>Answer Relevance</td>
+      <td>{bm_rel[0]}</td><td>{bm_rel[1]}</td><td>{bm_rel[2]}</td>
+      <td>{_best_high_badge(_rel) if _bm else _dash}</td><td>{_unit('0–1')}</td>
     </tr>
     <tr>
-      <td>Questions Won <span class="metric-note">(highest accuracy per question)</span></td>
-      <td>{bm_row_wins[0]}</td><td>{bm_row_wins[1]}</td><td>{bm_row_wins[2]}</td>
+      <td>Faithfulness</td>
+      <td>{bm_fth[0]}</td><td>{bm_fth[1]}</td><td>{bm_fth[2]}</td>
+      <td>{_best_high_badge(_fth) if _bm else _dash}</td><td>{_unit('0–1')}</td>
+    </tr>
+    <tr>
+      <td>Avg Response Time</td>
+      <td>{bm_tm[0]}</td><td>{bm_tm[1]}</td><td>{bm_tm[2]}</td>
+      <td>{_best_low_badge(_tm) if _bm else _dash}</td><td>{_unit('sec')}</td>
+    </tr>
+    <tr>
+      <td>Cost per Query</td>
+      <td>{bm_cst[0]}</td><td>{bm_cst[1]}</td><td>{bm_cst[2]}</td>
+      <td>{_best_low_badge(_cst) if _bm else _dash}</td><td>{_unit('USD')}</td>
+    </tr>
+    <tr>
+      <td>Overall Score (1–5)</td>
+      <td>{bm_ov[0]}</td><td>{bm_ov[1]}</td><td>{bm_ov[2]}</td>
+      <td>{_best_high_badge(_ov) if _bm else _dash}</td><td>{_unit('rating')}</td>
     </tr>
   </tbody>
 </table>
