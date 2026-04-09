@@ -57,6 +57,24 @@ Covers CS fundamentals, algorithms, web technologies, databases, and tooling:
 
 ---
 
+## Benchmark Results (n = 50 questions)
+
+| Metric | Baseline LLM | RAG Chatbot | Fine-Tuned | Unit |
+|--------|-------------|-------------|------------|------|
+| Answer Accuracy | 81.5 | 79.9 | — | % |
+| ROUGE-L | 0.216 | 0.291 | — | 0–1 |
+| Groundedness | 0.815 | 0.575 | — | 0–1 |
+| Answer Relevance | 0.720 | 0.768 | — | 0–1 |
+| Faithfulness | 0.216 | 0.172 | — | 0–1 |
+| Hallucination Rate | 0.0 | 6.0 | — | % |
+| Avg Response Time | 1.46 | 4.19 | — | sec |
+| Cost per Query | $0.0020 | $0.0020 | — | USD |
+
+> Fine-Tuned column shows `—` until `finetuned_model/` is placed in the project root (see Setup §4).  
+> Full per-question results are in `data/benchmark_cache.json`.
+
+---
+
 ## Project Structure
 
 ```
@@ -66,10 +84,15 @@ Covers CS fundamentals, algorithms, web technologies, databases, and tooling:
 ├── system2_rag.py                  # FAISS RAG pipeline
 ├── system3_inference.py            # Fine-tuned model inference
 ├── system3_finetune_colab.ipynb    # Qwen2.5 fine-tuning notebook (Colab)
+├── run_benchmark.py                # Standalone script to regenerate benchmark cache
 ├── requirements.txt
+├── checkpoint-25/                  # LoRA fine-tune checkpoint (Qwen2.5-1.5B, r=8, α=32)
+│   ├── adapter_model.safetensors   # Trained LoRA weights
+│   ├── adapter_config.json
+│   └── tokenizer.json / tokenizer_config.json
 ├── data/
 │   ├── reference_answers.json      # 50 Q&A pairs for auto-evaluation
-│   ├── benchmark_cache.json        # Persisted benchmark results (generated on first run)
+│   ├── benchmark_cache.json        # Pre-computed benchmark results (loads on startup)
 │   ├── finetune_data.jsonl         # Training data in ChatML format
 │   ├── faiss_index/                # FAISS vector store (built automatically)
 │   ├── docs/                       # Knowledge base .txt files
@@ -107,13 +130,31 @@ streamlit run demo.py
 
 The FAISS vector store is built automatically on first launch.
 
-### 4. (Optional) Fine-tune the model
+### 4. (Optional) Use the fine-tuned model
 
-Open `system3_finetune_colab.ipynb` in Google Colab, run all cells, then download the resulting `finetuned_model/` folder and place it in the project root.
+A trained LoRA checkpoint is included in `checkpoint-25/`. To activate it for inference:
 
-### 5. Run the benchmark (once)
+```bash
+# Merge LoRA adapter into base model and save as finetuned_model/
+python -c "
+from peft import PeftModel
+from transformers import AutoModelForCausalLM, AutoTokenizer
+base = AutoModelForCausalLM.from_pretrained('Qwen/Qwen2.5-1.5B-Instruct')
+model = PeftModel.from_pretrained(base, 'checkpoint-25')
+model.merge_and_unload().save_pretrained('finetuned_model')
+AutoTokenizer.from_pretrained('checkpoint-25').save_pretrained('finetuned_model')
+"
+```
 
-Click **Run Auto-Benchmark** in the Analytics tab. Results are saved to `data/benchmark_cache.json` and displayed permanently on every subsequent app load — no need to re-run.
+Alternatively, open `system3_finetune_colab.ipynb` in Google Colab to retrain from scratch.
+
+### 5. Benchmark results — pre-loaded
+
+`data/benchmark_cache.json` is included with pre-computed results for all 50 questions. The Analytics tab shows results instantly on startup. To regenerate:
+
+```bash
+python run_benchmark.py
+```
 
 ---
 
