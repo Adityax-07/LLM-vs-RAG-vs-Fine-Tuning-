@@ -1,3 +1,14 @@
+---
+title: CodeSage
+emoji: 🧠
+colorFrom: blue
+colorTo: indigo
+sdk: streamlit
+sdk_version: 1.35.0
+app_file: demo.py
+pinned: false
+---
+
 # CodeSage — LLM vs RAG vs Fine-Tuning
 
 > A live comparative study of three NLP architectures for domain-specific Q&A, built with Streamlit.

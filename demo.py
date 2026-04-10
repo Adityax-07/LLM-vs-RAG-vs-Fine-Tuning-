@@ -499,7 +499,7 @@ def _estimate_cost(answer: str, system: str) -> float:
 
 def run_benchmark(progress_bar=None):
     results = []
-    has_ft = os.path.exists("./finetuned_model")
+    has_ft = os.path.exists("./checkpoint-25") or os.path.exists("./finetuned_model")
     if has_ft:
         from system3_inference import ask_finetuned
     total = len(BENCHMARK_QUESTIONS)
@@ -734,8 +734,8 @@ if (run_clicked or st.session_state.auto_run) and question:
         with st.spinner("RAG retrieving + generating..."):
             r2 = ask_rag(question, vs)
     with col3:
-        if os.path.exists("./finetuned_model"):
-            with st.spinner("Fine-tuned model generating..."):
+        if os.path.exists("./checkpoint-25") or os.path.exists("./finetuned_model"):
+            with st.spinner("Fine-tuned model generating (first run downloads base model ~3GB)..."):
                 from system3_inference import ask_finetuned
                 r3 = ask_finetuned(question)
         else:
@@ -852,8 +852,7 @@ if st.session_state.last_results:
             </div>
             """, unsafe_allow_html=True)
             st.warning(
-                "Run `system3_finetune_colab.ipynb` on Google Colab, "
-                "download `finetuned_model.zip`, and unzip it here."
+                "Fine-tuned model adapter (checkpoint-25/) not found in the project root."
             )
         else:
             st.markdown(f"""
