@@ -1,13 +1,4 @@
----
-title: CodeSage
-emoji: 🧠
-colorFrom: blue
-colorTo: indigo
-sdk: streamlit
-sdk_version: 1.35.0
-app_file: demo.py
-pinned: false
----
+
 
 # CodeSage — LLM vs RAG vs Fine-Tuning
 
@@ -189,16 +180,7 @@ Drop any PDF into `data/pdfs/` and restart the app. The RAG pipeline ingests PDF
 
 ---
 
-## Deploy on Hugging Face Spaces
 
-```yaml
----
-title: CodeSage
-emoji: 🧙
-colorFrom: blue
-colorTo: purple
-sdk: streamlit
-sdk_version: "1.35.0"
 app_file: demo.py
 pinned: false
 ---
