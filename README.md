@@ -58,8 +58,6 @@ No cherry-picking. No manual grading. <strong>Real numbers, real trade-offs.</st
 
 </div>
 
-⚡ Benchmark Results
-
 ## 📌 Table of Contents
 
 | | Section |
@@ -75,22 +73,6 @@ No cherry-picking. No manual grading. <strong>Real numbers, real trade-offs.</st
 | 🛠️ | [Tech Stack](#️-tech-stack) |
 | 🗂️ | [Project Structure](#️-project-structure) |
 | 🔮 | [Roadmap](#-roadmap) |
-
-🧠 What is CodeSage?
-CodeSage is a decision-making tool for AI engineers. When building a domain-specific assistant, you always face the same three-way fork:
-                    ┌─────────────────────────────────┐
-                    │   Domain-specific AI assistant   │
-                    └──────────────┬──────────────────┘
-                                   │
-              ┌────────────────────┼────────────────────┐
-              ▼                    ▼                    ▼
-     ┌─────────────────┐  ┌──────────────────┐  ┌──────────────────┐
-     │   Baseline LLM  │  │       RAG        │  │   Fine-Tuning    │
-     │                 │  │                  │  │                  │
-     │ Fast. Zero setup│  │ Grounded. Fresh. │  │ Focused. Cheap.  │
-     │ May hallucinate │  │ Retrieval cost   │  │ Hard to update   │
-     └─────────────────┘  └──────────────────┘  └──────────────────┘
-CodeSage makes this trade-off visible — same question, same moment, real outputs from all three.
 
 ## ⚡ Benchmark Results
 
@@ -121,19 +103,19 @@ CodeSage makes this trade-off visible — same question, same moment, real outpu
 CodeSage is a **decision-making tool** for AI engineers. When building a domain-specific assistant, you always hit the same three-way fork:
 
 ```
-                       ┌──────────────────────────────────────┐
-                       │     Domain-Specific AI Assistant      │
-                       └─────────────────┬────────────────────┘
-                                         │
-              ┌──────────────────────────┼──────────────────────────┐
-              ▼                          ▼                          ▼
-   ┌──────────────────┐      ┌───────────────────┐      ┌───────────────────┐
-   │  🔵 BASELINE LLM │      │  🟢 RAG PIPELINE  │      │  🟣 FINE-TUNING   │
-   │                  │      │                   │      │                   │
-   │  ✅ Zero setup   │      │  ✅ Always fresh  │      │  ✅ 10× cheaper   │
-   │  ✅ Broad topics │      │  ✅ Grounded      │      │  ✅ 0% hallucin.  │
-   │  ❌ Hallucinates │      │  ⚠️  Retrieval lag │      │  ❌ Hard to update│
-   └──────────────────┘      └───────────────────┘      └───────────────────┘
+              ┌──────────────────────────────────────────┐
+              │       Domain-Specific AI Assistant        │
+              └────────────────────┬─────────────────────┘
+                                   │
+         ┌─────────────────────────┼─────────────────────────┐
+         ▼                         ▼                         ▼
+┌─────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│  BASELINE LLM   │     │   RAG PIPELINE   │     │   FINE-TUNING    │
+│                 │     │                  │     │                  │
+│ + Zero setup    │     │ + Always fresh   │     │ + 10x cheaper    │
+│ + Broad topics  │     │ + Grounded       │     │ + 0% hallucin.   │
+│ - Hallucinates  │     │ - Retrieval lag  │     │ - Hard to update │
+└─────────────────┘     └──────────────────┘     └──────────────────┘
 ```
 
 > CodeSage makes this trade-off **visible and measurable** — same question, same moment, real output from all three.
@@ -245,9 +227,7 @@ Each answer is auto-scored by an LLM judge across **8 dimensions**:
 git clone https://github.com/Adityax-07/LLM-vs-RAG-vs-Fine-Tuning-.git
 cd LLM-vs-RAG-vs-Fine-Tuning-
 pip install -r requirements.txt
-2 — Set API Key
-bash# Create .env file
-echo "GROQ_API_KEY=your_key_here" > .env
+```
 
 ### `Step 2` — Configure API Key
 
@@ -259,7 +239,9 @@ echo "GROQ_API_KEY=your_key_here" > .env
 
 ### `Step 3` — Launch
 
-🔮 Roadmap
+```bash
+streamlit run demo.py
+```
 
 > FAISS vector store builds automatically on first launch. **Systems 1 & 2 are ready instantly.**
 
