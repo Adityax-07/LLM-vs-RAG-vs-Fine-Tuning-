@@ -22,3 +22,12 @@ results/
 # OS
 .DS_Store
 Thumbs.db
+checkpoint-25/optimizer.pt
+checkpoint-25/rng_state.pth
+checkpoint-25/scaler.pt
+checkpoint-25/scheduler.pt
+checkpoint-25/training_args.bin
+checkpoint-25/trainer_state.json
+finetuned_model/
+accesstoke.py
+*.env
