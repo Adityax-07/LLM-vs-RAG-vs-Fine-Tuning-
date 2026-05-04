@@ -29,7 +29,8 @@ def load_model():
     _tokenizer = AutoTokenizer.from_pretrained(FINETUNED_PATH)
     base = AutoModelForCausalLM.from_pretrained(
         BASE_MODEL,
-        torch_dtype=torch.float32,
+        torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+        low_cpu_mem_usage=True,
     )
     _model = PeftModel.from_pretrained(base, FINETUNED_PATH)
     _model.eval()
