@@ -32,6 +32,13 @@ pinned: false
   <img src="https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white&labelColor=1a1a2e" />
 </p>
 
+<!-- Live Demo Button -->
+<p align="center">
+  <a href="https://huggingface.co/spaces/Adityax-07/CodeSage">
+    <img src="https://img.shields.io/badge/🤗%20Live%20Demo-Try%20CodeSage%20on%20HF%20Spaces-FFD21E?style=for-the-badge&labelColor=1a1a2e" />
+  </a>
+</p>
+
 <!-- Tech Stack Badges -->
 <p align="center">
   <img src="https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white" />
