@@ -1,13 +1,4 @@
----
-title: CodeSage
-emoji: 🧙
-colorFrom: blue
-colorTo: purple
-sdk: streamlit
-sdk_version: "1.35.0"
-app_file: demo.py
-pinned: false
----
+
 
 <div align="center">
 
